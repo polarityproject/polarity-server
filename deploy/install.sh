@@ -1,5 +1,5 @@
 #!/bin/sh
-# Installs (or updates) sfvr-server, the SFV rollback mod's rooms server
+# Installs (or updates) sfvr-server, SFVR's rooms server
 # (Weyvelength), on a Debian or Ubuntu VPS, with Cloudflare TURN when
 # /etc/sfvr-server/cloudflare.env has a key. Everything it adds is named
 # sfvr-server (user, services, /opt, /etc and /var/lib folders), so other

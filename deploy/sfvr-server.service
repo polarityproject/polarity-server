@@ -1,8 +1,8 @@
-# sfvr-server: the Weyvelength rooms server for the SFV rollback mod
+# sfvr-server: the Weyvelength rooms server for SFVR
 # (docs/server-vps.md). Rooms live in memory; matches run peer to peer, or
 # through Cloudflare's TURN relay with the credentials in the ice file.
 [Unit]
-Description=sfvr-server, rooms for the SFV rollback mod (Weyvelength)
+Description=sfvr-server, rooms for SFVR (Weyvelength)
 After=network-online.target sfvr-server-ice.service
 Wants=network-online.target
 

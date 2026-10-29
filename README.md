@@ -1,6 +1,7 @@
 # sfvr-server
 
-The rooms server for the SFV rollback mod (the `sfv-rollback` repository):
+The rooms server for SFVR, the Street Fighter V rollback netplay mod (the
+`sfv-rollback` repository):
 [Weyvelength](https://github.com/HeatXD/Weyvelength), built from a pinned
 commit and run on a Linux VPS with systemd, with Cloudflare TURN for pairs
 of players that can't link directly. Matches run peer to peer; the server
