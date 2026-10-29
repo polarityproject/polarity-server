@@ -1,0 +1,22 @@
+# Fetches short-lived TURN credentials from Cloudflare into the ice file
+# sfvr-server rereads before they expire (Weyvelength's own minter). Run by
+# sfvr-server-ice.timer. A failed run writes nothing: the server keeps what
+# it has.
+[Unit]
+Description=sfvr-server: mint Cloudflare TURN credentials
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=sfvr-server
+Group=sfvr-server
+StateDirectory=sfvr-server
+# Read by systemd before dropping to the sfvr-server user: it stays root-only.
+EnvironmentFile=/etc/sfvr-server/cloudflare.env
+Environment=ICE_FILE=/var/lib/sfvr-server/ice.conf
+ExecStart=/opt/sfvr-server/bin/mint-cloudflare-credentials.sh
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes

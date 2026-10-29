@@ -1,0 +1,13 @@
+# sfvr-server: fresh TURN credentials every 6 hours (they last 24), so a new
+# batch is always in place before the server's reread, 5 minutes before they
+# expire.
+[Unit]
+Description=sfvr-server: mint Cloudflare TURN credentials every 6 hours
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=6h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
