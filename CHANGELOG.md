@@ -7,6 +7,13 @@ must match the mod's (see the README). Newest first; the format follows
 
 ## [Unreleased]
 
+### Added
+
+- `deploy/port-443.sh`: the rooms server on TCP 443 as well (a ufw redirect to
+  its port), for players whose network blocks 5555; SFVR 0.1.3 tries 443
+  alongside 5555 for the public server. See `docs/server-vps.md`, "Port 443
+  as well".
+
 ## [0.1.0] - 2026-10-29
 
 The first public server, for SFVR 0.1.0.

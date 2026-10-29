@@ -116,6 +116,27 @@ one in `/etc/sfvr-server/server.env` (`SFVR_PORT=5600`, say) before
 installing, or afterwards plus `sudo systemctl restart sfvr-server`. Open
 that port in the firewall instead, and use it in the mod (`host:5600`).
 
+### Port 443 as well
+
+Some players' networks (work, school, some ISPs and routers) let only common
+ports through: their game gets no answer on 5555 at all, while the update
+check over HTTPS works. The mod connects to the public server on 5555 and 443
+at the same time and keeps whichever answers, so the server should answer on
+443 too:
+
+```sh
+sudo ss -ltnp 'sport = :443'      # nothing listed: 443 is free
+sudo sh port-443.sh               # in deploy/; `sudo sh port-443.sh off` removes it
+```
+
+It adds a ufw NAT rule (at the top of `/etc/ufw/before.rules`, between
+`sfvr-server` comment lines) that redirects TCP 443 to the server's port, so
+both ports reach the same process and the same rooms, and the `ufw limit` rule
+of step 1 covers 443 too. Nothing else may use 443 on the machine: the script
+refuses if something listens there, or if `before.rules` already has a `*nat`
+section (it prints the line to add by hand). Check from a Windows PC with
+`Test-NetConnection <address> -Port 443` in PowerShell.
+
 The installer:
 
 1. Installs the build tools.
