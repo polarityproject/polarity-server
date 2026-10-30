@@ -7,6 +7,10 @@ must match the mod's (see the README). Newest first; the format follows
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-29
+
+The rooms server answers on TCP 443 as well, for players whose network blocks 5555.
+
 ### Added
 
 - `deploy/port-443.sh`: the rooms server on TCP 443 as well (a ufw redirect to
