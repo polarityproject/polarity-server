@@ -251,20 +251,16 @@ unless the player turned it off (Settings, Logs):
 - **No addresses kept**: the journal and `received.txt` say what arrived, not
   from where.
 
-To pull them to your PC, from the mod repository (an SSH key login to the
-VPS; `-Sudo` if the login is not root):
+To pull them to your PC, copy the folders with `scp` (the mod repository's
+`docs/reviewing-reports.md` has the commands, and how to compare, replay and
+read them):
 
 ```powershell
-scripts\pull-reports.ps1 -Login root@203.0.113.20
+scp -r root@203.0.113.20:/var/lib/sfvr-server/reports/<match id> <game>\Binaries\Win64\reports\desyncs\
+scp -r root@203.0.113.20:/var/lib/sfvr-server/crashes/<date> <game>\Binaries\Win64\reports\crashes\
 ```
 
-Only files you don't have yet are copied, into
-`StreetFighterV\Binaries\Win64\reports\desyncs\<match id>` and
-`...\reports\crashes\<date>`. A match with both players' desync reports is
-compared with `sfvr peers` (`peers.txt` in its folder); each new crash
-report's fault (or "no clean exit") is listed. A minidump opens in Visual
-Studio or WinDbg; the mod's PDB names its frames (the game has no symbols:
-its frames stay StreetFighterV.exe+offset).
+A login other than root needs `sudo` to read `/var/lib/sfvr-server`.
 
 ## Day to day
 
