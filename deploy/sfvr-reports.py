@@ -113,8 +113,8 @@ class Limiter:
             if len(times) >= self.per_hour:
                 return False
             times.append(now)
-            if len(self.seen) > 10000:  # forget quiet addresses
-                for a in [a for a, t in self.seen.items() if not t]:
+            if len(self.seen) > 10000:  # forget addresses quiet for an hour
+                for a in [a for a, t in self.seen.items() if not t or now - t[-1] > 3600]:
                     del self.seen[a]
             return True
 
