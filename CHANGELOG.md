@@ -9,6 +9,12 @@ must match the mod's (see the README). Newest first; the format follows
 
 ### Added
 
+- `deploy/connection-limit.sh`: a looser limit on new connections to the
+  rooms server than ufw's `limit` (20 at once, then 30 a minute per address,
+  tries beyond it not counted), which refused players sharing an address
+  after a few quick hosts and joins. See `docs/server-vps.md`, "Connection
+  limit".
+
 - `sfvr-reports` (`deploy/sfvr-reports.py`, service `sfvr-reports`, TCP 5580):
   takes the desync reports SFVR games send and files them by match under
   `/var/lib/sfvr-server/reports`, both players' halves together, and crash

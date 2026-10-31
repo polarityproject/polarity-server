@@ -2,8 +2,9 @@
 # The rooms server on TCP 443 as well, for players whose network lets only
 # common ports through (the mod tries 443 alongside 5555 for the public
 # server). A ufw NAT rule redirects 443 to the server's own port, so both
-# reach the same process and the same rooms; the firewall's existing
-# `limit` rule for that port covers the redirected connections too.
+# reach the same process and the same rooms; the firewall's limit for that
+# port (connection-limit.sh, or ufw's `limit`) covers the redirected
+# connections too.
 #   sudo sh port-443.sh        add the redirect (or check it is there)
 #   sudo sh port-443.sh off    remove it
 set -eu

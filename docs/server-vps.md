@@ -67,7 +67,7 @@ Log in, update, and set up the firewall (SSH first, or you lock yourself out):
 ```sh
 sudo apt update && sudo apt upgrade -y
 sudo ufw allow OpenSSH
-sudo ufw limit 5555/tcp comment sfvr-server   # refuses an address opening 6+ connections in 30 s
+sudo ufw limit 5555/tcp comment sfvr-server   # for now: 6 connections in 30 s per address (see "Connection limit")
 sudo ufw allow 5580/tcp comment sfvr-reports  # desync and crash reports (see "Desync and crash reports")
 sudo ufw enable
 ```
@@ -117,13 +117,32 @@ one in `/etc/sfvr-server/server.env` (`SFVR_PORT=5600`, say) before
 installing, or afterwards plus `sudo systemctl restart sfvr-server`. Open
 that port in the firewall instead, and use it in the mod (`host:5600`).
 
+### Connection limit
+
+ufw's `limit` rule of step 1 refuses an address that opens 6 connections in
+30 seconds, and every refused try counts again, so retrying keeps it out.
+Players who share an address (two PCs behind one router, a LAN, a provider's
+carrier-grade NAT) hit that after a few quick hosts and joins: the game says
+it cannot reach the server for a minute. Replace it with a looser limit (20
+new connections at once, then 30 a minute per address; tries beyond that
+are dropped without counting):
+
+```sh
+sudo sh connection-limit.sh       # in deploy/; `sudo sh connection-limit.sh off` puts ufw's limit back
+```
+
+It adds a rule to `/etc/ufw/before.rules` (between `sfvr-server` comment
+lines) and turns `ufw limit 5555/tcp` into `ufw allow 5555/tcp`. It covers
+443 too when the redirect below is there. The mod opens one connection per
+host or join (443 only when 5555 does not answer within a moment).
+
 ### Port 443 as well
 
 Some players' networks (work, school, some ISPs and routers) let only common
 ports through: their game gets no answer on 5555 at all, while the update
-check over HTTPS works. The mod connects to the public server on 5555 and 443
-at the same time and keeps whichever answers, so the server should answer on
-443 too:
+check over HTTPS works. The mod connects to the public server on 5555, and
+on 443 too when 5555 does not answer within a moment, so the server should
+answer on 443 as well:
 
 ```sh
 sudo ss -ltnp 'sport = :443'      # nothing listed: 443 is free
@@ -132,8 +151,8 @@ sudo sh port-443.sh               # in deploy/; `sudo sh port-443.sh off` remove
 
 It adds a ufw NAT rule (at the top of `/etc/ufw/before.rules`, between
 `sfvr-server` comment lines) that redirects TCP 443 to the server's port, so
-both ports reach the same process and the same rooms, and the `ufw limit` rule
-of step 1 covers 443 too. Nothing else may use 443 on the machine: the script
+both ports reach the same process and the same rooms, and the connection
+limit covers 443 too. Nothing else may use 443 on the machine: the script
 refuses if something listens there, or if `before.rules` already has a `*nat`
 section (it prints the line to add by hand). Check from a Windows PC with
 `Test-NetConnection <address> -Port 443` in PowerShell.
