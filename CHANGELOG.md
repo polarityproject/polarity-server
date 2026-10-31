@@ -7,6 +7,10 @@ must match the mod's (see the README). Newest first; the format follows
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-10-31
+
+Desync and crash reports from SFVR 0.2.0 games, and a looser connection limit.
+
 ### Added
 
 - `deploy/connection-limit.sh`: a looser limit on new connections to the
