@@ -1,0 +1,31 @@
+# sfvr-reports: takes the desync reports SFVR games send and files them by
+# match under /var/lib/sfvr-server/reports (docs/server-vps.md, "Desync
+# reports").
+[Unit]
+Description=sfvr-server, desync reports from SFVR games
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=sfvr-server
+Group=sfvr-server
+StateDirectory=sfvr-server
+# SFVR_REPORTS_PORT (5580) and SFVR_REPORTS_MAX_MB (4096) unless changed there.
+Environment=SFVR_REPORTS_PORT=5580 SFVR_REPORTS_MAX_MB=4096
+EnvironmentFile=-/etc/sfvr-server/server.env
+ExecStart=/usr/bin/python3 /opt/sfvr-server/bin/sfvr-reports.py --dir /var/lib/sfvr-server/reports
+Restart=always
+RestartSec=2
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/sfvr-server/reports
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryMax=512M
+
+[Install]
+WantedBy=multi-user.target

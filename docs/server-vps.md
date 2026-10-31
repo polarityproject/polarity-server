@@ -68,6 +68,7 @@ Log in, update, and set up the firewall (SSH first, or you lock yourself out):
 sudo apt update && sudo apt upgrade -y
 sudo ufw allow OpenSSH
 sudo ufw limit 5555/tcp comment sfvr-server   # refuses an address opening 6+ connections in 30 s
+sudo ufw allow 5580/tcp comment sfvr-reports  # desync reports (see "Desync reports")
 sudo ufw enable
 ```
 
@@ -198,11 +199,51 @@ the session either connects through Cloudflare's TURN or doesn't connect at
 all. The mod's log says `netplay: the link to the other side is relayed
 through turn.cloudflare.com`.
 
+## Desync reports
+
+`install.sh` also installs `sfvr-reports` (`deploy/sfvr-reports.py`, Python's
+standard library only, service `sfvr-reports`). SFVR games send it their
+desync reports after a match that had one, unless the player turned it off
+(Settings, Logs): the desync's recording, the match's recording and its log.
+It files them by match id, so both players' halves of a desync land in one
+folder:
+
+```text
+/var/lib/sfvr-server/reports/<match id>/<file names as the game saved them>
+/var/lib/sfvr-server/reports/<match id>/received.txt   # when each came, from which SFVR version
+```
+
+- **Port**: TCP 5580 (`SFVR_REPORTS_PORT` in `/etc/sfvr-server/server.env`),
+  plain HTTP. Open it in the firewall (`sudo ufw allow 5580/tcp`). The mod's
+  built-in address is `http://203.0.113.20:5580`; `[report] url` in
+  `sfv_rollback.ini` sends elsewhere.
+- **What it takes**: only file names the mod gives its recordings and match
+  logs, only files that start as the mod writes them, at most 16 MB each,
+  120 files an hour from one address. Anything else gets a 4xx answer and is
+  not stored. A file it already has is not stored again.
+- **Disk**: past `SFVR_REPORTS_MAX_MB` (4096) the matches that have gone
+  longest without an upload are removed.
+- **No addresses kept**: the journal and `received.txt` say what arrived, not
+  from where.
+
+To pull them to your PC, from the mod repository (an SSH key login to the
+VPS; `-Sudo` if the login is not root):
+
+```powershell
+scripts\pull-reports.ps1 -Login root@203.0.113.20
+```
+
+Only files you don't have yet are copied, into
+`StreetFighterV\Binaries\Win64\reports\server\<match id>`. A match with both
+players' desync reports is compared with `sfvr peers` (`peers.txt` in its
+folder).
+
 ## Day to day
 
 ```sh
 journalctl -u sfvr-server -f                 # the server's log, live
 journalctl -u sfvr-server-ice                # the credential fetches
+journalctl -u sfvr-reports -f                # desync reports as they arrive
 systemctl list-timers sfvr-server-ice.timer  # when the next fetch runs
 sudo systemctl restart sfvr-server           # restart (drops rooms; matches in progress go on)
 ```

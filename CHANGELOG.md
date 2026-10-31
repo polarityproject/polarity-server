@@ -7,6 +7,15 @@ must match the mod's (see the README). Newest first; the format follows
 
 ## [Unreleased]
 
+### Added
+
+- `sfvr-reports` (`deploy/sfvr-reports.py`, service `sfvr-reports`, TCP 5580):
+  takes the desync reports SFVR games send and files them by match under
+  `/var/lib/sfvr-server/reports`, both players' halves together. Only the
+  mod's own file names and formats, 16 MB a file, 120 files an hour per
+  address, `SFVR_REPORTS_MAX_MB` (4096) on disk. `install.sh` installs it
+  (and Python 3); open TCP 5580. See `docs/server-vps.md`, "Desync reports".
+
 ## [0.1.1] - 2026-10-29
 
 The rooms server answers on TCP 443 as well, for players whose network blocks 5555.

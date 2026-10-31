@@ -11,9 +11,10 @@ if [ "$(id -u)" -ne 0 ]; then
 	exit 1
 fi
 
-systemctl disable --now "$NAME.service" "$NAME-ice.timer" 2>/dev/null || true
+systemctl disable --now "$NAME.service" "$NAME-ice.timer" sfvr-reports.service 2>/dev/null || true
 systemctl stop "$NAME-ice.service" 2>/dev/null || true
-rm -f "/etc/systemd/system/$NAME.service" "/etc/systemd/system/$NAME-ice.service" "/etc/systemd/system/$NAME-ice.timer"
+rm -f "/etc/systemd/system/$NAME.service" "/etc/systemd/system/$NAME-ice.service" "/etc/systemd/system/$NAME-ice.timer" \
+	/etc/systemd/system/sfvr-reports.service
 systemctl daemon-reload
 rm -rf "/opt/$NAME" "/etc/$NAME" "/var/lib/$NAME"
 id "$NAME" >/dev/null 2>&1 && userdel "$NAME"
