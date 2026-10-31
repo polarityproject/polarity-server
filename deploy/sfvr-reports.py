@@ -1,18 +1,23 @@
 #!/usr/bin/env python3
-# sfvr-reports: takes desync reports from SFVR games (the mod sends them
-# after a match with a desync, unless the player turned it off) and files
-# them by match, so both players' halves of a desync end up side by side:
+# sfvr-reports: takes desync and crash reports from SFVR games (the mod
+# sends them unless the player turned it off). Desync reports are filed by
+# match, so both players' halves of a desync end up side by side; crash
+# reports by day:
 #
 #   <reports dir>/<match id>/<file name as the game saved it>
+#   <crashes dir>/<date>/<date>_<time>_crash_<id>.log (and .dmp)
 #
-# One file per request: POST /v1/reports/<file name>, the file as the body.
-# Only names the mod gives its recordings and match logs (.sfvr, .log), only
-# files that start as the mod writes them, at most --max-file-mb each, at
-# most --per-hour files per address an hour; past --max-total-mb the oldest
-# matches are removed. GET /v1/health answers "ok".
+# One file per request, the file as the body: POST /v1/reports/<file name>
+# (recordings and match logs: .sfvr, .log) or POST /v1/crashes/<file name>
+# (a crash's log and minidump: .log, .dmp). Only the names the mod gives
+# them, only files that start as the mod writes them, at most --max-file-mb
+# each, at most --per-hour files per address an hour; past --max-total-mb
+# (--max-crashes-mb) the oldest folders are removed. GET /v1/health answers
+# "ok".
 #
 # Settings come from /etc/sfvr-server/server.env (sfvr-reports.service):
-# SFVR_REPORTS_PORT, SFVR_REPORTS_MAX_MB. Standard library only.
+# SFVR_REPORTS_PORT, SFVR_REPORTS_MAX_MB, SFVR_CRASHES_MAX_MB. Standard
+# library only.
 import argparse
 import collections
 import http.server
@@ -27,9 +32,10 @@ NAME = re.compile(
     r"^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_[A-Za-z0-9-]{1,40}_vs_[A-Za-z0-9-]{1,40}"
     r"_(?P<match>[0-9a-f]{8})_(?:p1|p2|spec)(?:_desync)?\.(?P<ext>sfvr|log)$"
 )
-# Both start with "SFVR": a recording with its format version, a match log
-# with "SFVR <mod version> match log".
-MAGIC = b"SFVR"
+CRASH = re.compile(r"^(?P<day>\d{4}-\d{2}-\d{2})_\d{2}-\d{2}-\d{2}_crash_[0-9a-f]{8}\.(?P<ext>log|dmp)$")
+# Recordings and logs start with "SFVR" (a recording with its format
+# version, a log with "SFVR <mod version> ..."); a minidump with "MDMP".
+MAGIC = {"sfvr": b"SFVR", "log": b"SFVR", "dmp": b"MDMP"}
 
 
 class Store:
@@ -139,11 +145,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.answer(404, "not found")
 
     def do_POST(self):
-        prefix = "/v1/reports/"
-        if not self.path.startswith(prefix):
+        for prefix, pattern, store, key in (
+            ("/v1/reports/", NAME, self.server.store, "match"),
+            ("/v1/crashes/", CRASH, self.server.crashes, "day"),
+        ):
+            if self.path.startswith(prefix):
+                break
+        else:
             return self.answer(404, "not found")
         name = self.path[len(prefix):]
-        m = NAME.match(name)
+        m = pattern.match(name)
         if not m:
             return self.answer(400, "not a report name")
         try:
@@ -152,18 +163,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.answer(411, "length required")
         if length > self.server.max_file:
             return self.answer(413, "too large")
-        if length < len(MAGIC):
+        magic = MAGIC[m["ext"]]
+        if length < len(magic):
             return self.answer(400, "empty")
         if not self.server.limiter.allow(self.client_address[0]):
             return self.answer(429, "too many reports, try later")
         data = self.rfile.read(length)
         if len(data) != length:
             return self.answer(400, "cut short")
-        if not data.startswith(MAGIC):
+        if not data.startswith(magic):
             return self.answer(400, "not an SFVR file")
         version = re.sub(r"[^0-9A-Za-z.+-]", "", self.headers.get("X-SFVR-Version", ""))[:32] or "?"
         try:
-            stored = self.server.store.put(m["match"], name, data, version)
+            stored = store.put(m[key], name, data, version)
         except OSError as e:
             log(f"cannot store {name}: {e}")
             return self.answer(507, "cannot store it")
@@ -177,16 +189,22 @@ def main():
     p.add_argument("--port", type=int, default=int(os.environ.get("SFVR_REPORTS_PORT", "5580")))
     p.add_argument("--bind", default="0.0.0.0")
     p.add_argument("--dir", default="/var/lib/sfvr-server/reports")
+    p.add_argument("--crashes-dir", default="/var/lib/sfvr-server/crashes")
     p.add_argument("--max-total-mb", type=int, default=int(os.environ.get("SFVR_REPORTS_MAX_MB", "4096")))
+    p.add_argument("--max-crashes-mb", type=int, default=int(os.environ.get("SFVR_CRASHES_MAX_MB", "1024")))
     p.add_argument("--max-file-mb", type=int, default=16)
     p.add_argument("--per-hour", type=int, default=120)
     a = p.parse_args()
     server = http.server.ThreadingHTTPServer((a.bind, a.port), Handler)
     server.daemon_threads = True
     server.store = Store(a.dir, a.max_total_mb * 1024 * 1024)
+    server.crashes = Store(a.crashes_dir, a.max_crashes_mb * 1024 * 1024)
     server.limiter = Limiter(a.per_hour)
     server.max_file = a.max_file_mb * 1024 * 1024
-    log(f"sfvr-reports on {a.bind}:{a.port}, into {a.dir} ({server.store.total // (1024 * 1024)} of {a.max_total_mb} MB)")
+    log(
+        f"sfvr-reports on {a.bind}:{a.port}, into {a.dir} ({server.store.total // (1024 * 1024)} of {a.max_total_mb} MB)"
+        f" and {a.crashes_dir} ({server.crashes.total // (1024 * 1024)} of {a.max_crashes_mb} MB)"
+    )
     try:
         server.serve_forever()
     except KeyboardInterrupt:

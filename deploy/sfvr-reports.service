@@ -1,8 +1,8 @@
-# sfvr-reports: takes the desync reports SFVR games send and files them by
-# match under /var/lib/sfvr-server/reports (docs/server-vps.md, "Desync
-# reports").
+# sfvr-reports: takes the desync and crash reports SFVR games send, under
+# /var/lib/sfvr-server/reports and crashes (docs/server-vps.md, "Desync and
+# crash reports").
 [Unit]
-Description=sfvr-server, desync reports from SFVR games
+Description=sfvr-server, desync and crash reports from SFVR games
 After=network-online.target
 Wants=network-online.target
 
@@ -10,16 +10,17 @@ Wants=network-online.target
 User=sfvr-server
 Group=sfvr-server
 StateDirectory=sfvr-server
-# SFVR_REPORTS_PORT (5580) and SFVR_REPORTS_MAX_MB (4096) unless changed there.
-Environment=SFVR_REPORTS_PORT=5580 SFVR_REPORTS_MAX_MB=4096
+# SFVR_REPORTS_PORT (5580), SFVR_REPORTS_MAX_MB (4096) and SFVR_CRASHES_MAX_MB
+# (1024) unless changed there.
+Environment=SFVR_REPORTS_PORT=5580 SFVR_REPORTS_MAX_MB=4096 SFVR_CRASHES_MAX_MB=1024
 EnvironmentFile=-/etc/sfvr-server/server.env
-ExecStart=/usr/bin/python3 /opt/sfvr-server/bin/sfvr-reports.py --dir /var/lib/sfvr-server/reports
+ExecStart=/usr/bin/python3 /opt/sfvr-server/bin/sfvr-reports.py --dir /var/lib/sfvr-server/reports --crashes-dir /var/lib/sfvr-server/crashes
 Restart=always
 RestartSec=2
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
-ReadWritePaths=/var/lib/sfvr-server/reports
+ReadWritePaths=/var/lib/sfvr-server/reports /var/lib/sfvr-server/crashes
 PrivateTmp=yes
 PrivateDevices=yes
 ProtectKernelTunables=yes

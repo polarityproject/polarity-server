@@ -11,10 +11,12 @@ must match the mod's (see the README). Newest first; the format follows
 
 - `sfvr-reports` (`deploy/sfvr-reports.py`, service `sfvr-reports`, TCP 5580):
   takes the desync reports SFVR games send and files them by match under
-  `/var/lib/sfvr-server/reports`, both players' halves together. Only the
-  mod's own file names and formats, 16 MB a file, 120 files an hour per
-  address, `SFVR_REPORTS_MAX_MB` (4096) on disk. `install.sh` installs it
-  (and Python 3); open TCP 5580. See `docs/server-vps.md`, "Desync reports".
+  `/var/lib/sfvr-server/reports`, both players' halves together, and crash
+  reports by day under `/var/lib/sfvr-server/crashes` (`/v1/crashes/`). Only
+  the mod's own file names and formats, 16 MB a file, 120 files an hour per
+  address, `SFVR_REPORTS_MAX_MB` (4096) and `SFVR_CRASHES_MAX_MB` (1024) on
+  disk. `install.sh` installs it (and Python 3); open TCP 5580. See
+  `docs/server-vps.md`, "Desync and crash reports".
 
 ## [0.1.1] - 2026-10-29
 

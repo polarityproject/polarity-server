@@ -58,8 +58,9 @@ install -d -m 0755 "$ETC"
 [ -f "$ETC/cloudflare.env" ] || install -m 0600 "$HERE/cloudflare.env.example" "$ETC/cloudflare.env"
 install -m 0644 "$HERE/$NAME.service" "$HERE/$NAME-ice.service" "$HERE/$NAME-ice.timer" "$HERE/sfvr-reports.service" /etc/systemd/system/
 install -d -o "$NAME" -g "$NAME" -m 0750 "$STATE"
-# Desync reports (sfvr-reports.service); pulled with sudo (docs/server-vps.md).
-install -d -o "$NAME" -g "$NAME" -m 0755 "$STATE/reports"
+# Desync and crash reports (sfvr-reports.service); pulled with sudo
+# (docs/server-vps.md).
+install -d -o "$NAME" -g "$NAME" -m 0755 "$STATE/reports" "$STATE/crashes"
 # Until TURN is set up: STUN alone, so players behind strict NATs (some
 # mobile and corporate networks) cannot connect. No "expires" line: the
 # server rereads the file every 5 minutes, so minted credentials replace
@@ -88,4 +89,4 @@ sleep 1
 systemctl --no-pager --lines=5 status "$NAME.service" sfvr-reports.service || true
 PORT=$(sed -n 's/^SFVR_PORT=\([0-9]*\).*/\1/p' "$ETC/server.env")
 REPORTS=$(sed -n 's/^SFVR_REPORTS_PORT=\([0-9]*\).*/\1/p' "$ETC/server.env")
-echo "done: $NAME listens on TCP ${PORT:-5555}, desync reports on TCP ${REPORTS:-5580}; open both in the firewall (docs/server-vps.md)"
+echo "done: $NAME listens on TCP ${PORT:-5555}, desync and crash reports on TCP ${REPORTS:-5580}; open both in the firewall (docs/server-vps.md)"
