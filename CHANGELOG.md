@@ -7,6 +7,18 @@ must match the mod's (see the README). Newest first; the format follows
 
 ## [Unreleased]
 
+### Added
+
+- `deploy/collect-reports.py` (installed in `/opt/sfvr-server/bin`): packs
+  the desync reports received so far (`--crashes`: the crash reports too)
+  into one zip laid out like the game's `reports` folder, then deletes them
+  from the server. See `docs/server-vps.md`, "Collecting them in one zip".
+
+### Fixed
+
+- `sfvr-reports` counts its folders again before removing any for space, so
+  reports deleted outside it no longer make it remove matches early.
+
 ## [0.1.2] - 2026-10-31
 
 Desync and crash reports from SFVR 0.2.0 games, and a looser connection limit.

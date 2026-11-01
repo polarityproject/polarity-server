@@ -83,10 +83,15 @@ class Store:
         # The oldest matches go first (a folder's time is its last upload).
         if self.total <= self.max_total:
             return
+        # Counted again first: collect-reports.py deletes folders behind our
+        # back, and its ".collecting-*" folder (being packed) is not ours.
+        self.total = sum(
+            self._size(os.path.join(self.root, d)) for d in os.listdir(self.root) if not d.startswith(".")
+        )
         folders = sorted(
             (os.path.getmtime(os.path.join(self.root, d)), d)
             for d in os.listdir(self.root)
-            if d != keep and os.path.isdir(os.path.join(self.root, d))
+            if d != keep and not d.startswith(".") and os.path.isdir(os.path.join(self.root, d))
         )
         for _, d in folders:
             if self.total <= self.max_total:

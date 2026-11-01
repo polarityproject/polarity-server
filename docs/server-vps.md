@@ -262,6 +262,35 @@ scp -r root@203.0.113.20:/var/lib/sfvr-server/crashes/<date> <game>\Binaries\Win
 
 A login other than root needs `sudo` to read `/var/lib/sfvr-server`.
 
+### Collecting them in one zip
+
+`collect-reports.py` (installed next to the service) packs every desync
+report received so far into one zip and deletes them from the server; with
+`--crashes`, the crash reports too:
+
+```sh
+sudo python3 /opt/sfvr-server/bin/collect-reports.py --dry-run    # what it would pack
+sudo python3 /opt/sfvr-server/bin/collect-reports.py              # desyncs, into the current folder
+sudo python3 /opt/sfvr-server/bin/collect-reports.py --crashes --out /root
+```
+
+It prints the zip's path (`sfvr-reports-<date>_<time>.zip`; under `sudo` it
+belongs to your login). The zip holds `desyncs/<match id>/...` and
+`crashes/<date>/...`, so it unpacks straight into the game's `reports`
+folder:
+
+```powershell
+scp root@203.0.113.20:/root/sfvr-reports-<date>_<time>.zip .
+Expand-Archive sfvr-reports-<date>_<time>.zip <game>\Binaries\Win64\reports
+```
+
+- The reports are deleted only once the zip is complete and reads back; a
+  failure leaves them where they were. `--keep` packs them and leaves them.
+- A match that got a file in the last 10 minutes (`--min-age`) stays for the
+  next run, so both players' halves go in one zip.
+- `sfvr-reports` goes on taking reports meanwhile. The zip is yours to
+  delete on the server once downloaded (`rm /root/sfvr-reports-*.zip`).
+
 ## Day to day
 
 ```sh

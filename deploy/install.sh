@@ -50,7 +50,7 @@ echo "== install into $HOME_DIR"
 install -d -m 0755 "$BIN"
 install -m 0755 "$SRC/build/Server/Server" "$BIN/weyvelength-server"
 install -m 0755 "$SRC/docs/examples/mint-cloudflare-credentials.sh" "$BIN/mint-cloudflare-credentials.sh"
-install -m 0755 "$HERE/sfvr-reports.py" "$BIN/sfvr-reports.py"
+install -m 0755 "$HERE/sfvr-reports.py" "$HERE/collect-reports.py" "$BIN/"
 install -d -m 0755 "$ETC"
 # The port (5555 unless changed here), and the Cloudflare key: root only
 # (systemd reads both for the services).
