@@ -1,0 +1,8 @@
+# The images need deploy/keeper (the keeper's sources) and docker/*.sh only.
+.git
+docker/secrets
+docker/*.env
+docker/.env
+docker/keeper-words.txt
+*.env
+!*.env.example

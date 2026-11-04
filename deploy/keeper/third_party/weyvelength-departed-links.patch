@@ -1,0 +1,37 @@
+diff --git a/Client/src/client.cpp b/Client/src/client.cpp
+index e40708c..a8ea3bd 100644
+--- a/Client/src/client.cpp
++++ b/Client/src/client.cpp
+@@ -382,7 +382,11 @@ namespace Weyvelength {
+ 				std::erase(_members, left->id);
+ 				_names.erase(left->id);
+ 				_member_data.erase(left->id);
+-				DestroyLink(left->id); // no member, no mesh link
++				// a link that is up stays: the member may only have lost the
++				// server (whatever runs over the link goes on, and ends when
++				// the link fails or this client leaves the room)
++				if (!PeerConnectedP2P(left->id))
++					DestroyLink(left->id); // no member, no mesh link
+ 				_mesh->attempts.erase(left->id); // and no grudge if they rejoin
+ 			}
+ 		}
+diff --git a/Client/src/p2p_mesh.cpp b/Client/src/p2p_mesh.cpp
+index 5b62c85..d7c8b8f 100644
+--- a/Client/src/p2p_mesh.cpp
++++ b/Client/src/p2p_mesh.cpp
+@@ -48,10 +48,14 @@ namespace Weyvelength {
+ 		if (msg.empty() || msg.size() > Proto::max_p2p_message_size)
+ 			return false;
+ 
+-		if (id == _id || std::ranges::find(_members, id) == _members.end())
++		if (id == _id)
+ 			return false;
+ 
++		// a member's link, or one kept up after its member left the room
+ 		PeerLink* link = FindLink(id);
++		if (std::ranges::find(_members, id) == _members.end() && !(link && link->connected))
++			return false;
++
+ 		if (!link) {
+ 			link = CreateLink(id); // lazy: the first message to a peer starts ICE
+ 			if (!link)

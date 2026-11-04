@@ -1,0 +1,68 @@
+--- a/Client/include/private/client.h
++++ b/Client/include/private/client.h
+@@ -63,6 +63,7 @@
+ 		int PeerLinkPath(uint32_t id) const; // WeyveLinkPath: how the link's selected candidate pair carries it
+ 		const std::string* TurnHost() const; // the first TURN server handed to us, or null
+ 		void SetRelayOnly(bool on); // testing: take only a peer's relay candidates, so links go through TURN
++		void SetPortRange(uint16_t begin, uint16_t end); // links built from now on bind a local UDP port in [begin, end]; 0 0: any
+ 
+ 		uint32_t Id() const;  // 0 until the server has assigned one
+ 		const std::string& Name() const; // our own name, as the server accepted it
+@@ -117,6 +118,7 @@
+ 
+ 		Proto::IceServers _ice; // handed to us by the server; feeds every new link
+ 		bool _relay_only = false;
++		uint16_t _port_begin = 0, _port_end = 0;
+ 
+ 		std::queue<Proto::ServerMessage> _inbox;
+ 		std::queue<std::pair<uint32_t, Proto::P2PMessage>> _p2p_inbox;
+--- a/Client/include/weyvelength.h
++++ b/Client/include/weyvelength.h
+@@ -226,6 +226,9 @@
+ // side's and the peer's), so they connect through TURN or not at all, also
+ // with a peer that does not test it.
+ WEYVE_API void weyve_set_relay_only(WeyveClient* client, bool on);
++// Links built from now on bind their local UDP port in [begin, end] (a
++// server behind a firewall opens that range); 0 and 0: any port.
++WEYVE_API void weyve_set_port_range(WeyveClient* client, uint16_t begin, uint16_t end);
+ 
+ // --- cached room state ---
+ // Getters below read the client's cache; nothing blocks or hits the network.
+--- a/Client/src/p2p_mesh.cpp
++++ b/Client/src/p2p_mesh.cpp
+@@ -115,6 +115,12 @@
+ 		return _ice.turn.empty() ? nullptr : &_ice.turn.front().host;
+ 	}
+ 
++	void Client::SetPortRange(uint16_t begin, uint16_t end)
++	{
++		_port_begin = begin;
++		_port_end = end;
++	}
++
+ 	void Client::SetRelayOnly(bool on)
+ 	{
+ 		_relay_only = on;
+@@ -166,6 +172,8 @@
+ 		}
+ 		config.turn_servers = turn.empty() ? nullptr : turn.data();
+ 		config.turn_servers_count = (int)turn.size();
++		config.local_port_range_begin = _port_begin;
++		config.local_port_range_end = _port_end;
+ 		config.cb_state_changed = OnJuiceState;
+ 		config.cb_candidate = OnJuiceCandidate;
+ 		config.cb_gathering_done = OnJuiceGatheringDone;
+--- a/Client/src/weyvelength.cpp
++++ b/Client/src/weyvelength.cpp
+@@ -190,6 +190,11 @@
+ 	client->client.SetRelayOnly(on);
+ }
+ 
++void weyve_set_port_range(WeyveClient* client, uint16_t begin, uint16_t end)
++{
++	client->client.SetPortRange(begin, end);
++}
++
+ // --- cached room state ---
+ 
+ uint32_t weyve_id(const WeyveClient* client)

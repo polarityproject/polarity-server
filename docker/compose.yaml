@@ -1,0 +1,73 @@
+# SFVR's custom rooms server on one VPS (docs/rooms-vps-docker.md):
+#   server  the rooms server (Weyvelength), TCP ${SFVR_PORT} (5555)
+#   ice     Cloudflare TURN credentials for it, every 6 hours
+#   keeper  sfvr-keeper, the tables and moderation, a client of the server;
+#           its peer-to-peer links use UDP ${KEEPER_PORTS}
+# Run from this folder: docker compose up -d --build
+#
+# Host networking: Docker's published ports go around ufw, which holds the
+# per-address connection limit (connection-limit.sh) and the TCP 443
+# redirect (port-443.sh); and the keeper's links need the VPS's own address
+# for their ICE candidates. Each container still has its own user, files
+# and no capabilities.
+name: sfvr-rooms
+
+x-hardened: &hardened
+  network_mode: host
+  restart: unless-stopped
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  tmpfs: ["/tmp"]
+  logging:
+    driver: json-file
+    options: {max-size: "10m", max-file: "5"}
+
+services:
+  server:
+    <<: *hardened
+    build: {context: .., dockerfile: docker/server.Dockerfile}
+    image: sfvr-rooms/server:latest
+    environment:
+      SFVR_PORT: ${SFVR_PORT:-5555}
+    volumes: ["ice:/data"]
+    ulimits:
+      nofile: {soft: 65536, hard: 65536}
+
+  ice:
+    <<: *hardened
+    image: sfvr-rooms/server:latest
+    entrypoint: ["/usr/local/bin/ice-loop.sh"]
+    # CF_TURN_KEY_ID, CF_TURN_API_TOKEN (cloudflare.env.example).
+    env_file: [cloudflare.env]
+    volumes: ["ice:/data"]
+    depends_on: [server]
+
+  keeper:
+    <<: *hardened
+    build: {context: .., dockerfile: docker/keeper.Dockerfile}
+    image: sfvr-rooms/keeper:latest
+    command:
+      - --key
+      - /run/secrets/keeper_key
+      - --state
+      - /data/state
+      - --words
+      - /config/keeper-words.txt
+      - --server
+      - 127.0.0.1:${SFVR_PORT:-5555}
+      - --ports
+      - ${KEEPER_PORTS:-47200-47299}
+    secrets: [keeper_key]
+    volumes:
+      - "keeper:/data"
+      - "./keeper-words.txt:/config/keeper-words.txt:ro"
+    depends_on: [server]
+
+secrets:
+  # Made once with: docker compose run --rm --no-deps -v ./secrets:/out keeper --new-key /out/keeper.key
+  keeper_key: {file: ./secrets/keeper.key}
+
+volumes:
+  ice: {}
+  keeper: {}
