@@ -23,18 +23,34 @@ if [ -f /etc/sfvr-server/server.env ]; then
   PORT=${SFVR_PORT:-5555}
 fi
 
+# ufw reload leaves the nat table's rules in place: removed by hand (the
+# rule this script writes now, and the older one without the address match).
+unredirect() {
+  while iptables -t nat -D PREROUTING -p tcp --dport 443 -m addrtype --dst-type LOCAL -j REDIRECT --to-ports "$PORT" 2>/dev/null; do :; done
+  while iptables -t nat -D PREROUTING -p tcp --dport 443 -j REDIRECT --to-ports "$PORT" 2>/dev/null; do :; done
+}
+
 if [ "${1:-on}" = "off" ]; then
-  if ! grep -qF "$BEGIN" "$RULES"; then echo "no redirect to remove"; exit 0; fi
+  if ! grep -qF "$BEGIN" "$RULES"; then echo "no redirect to remove"; unredirect; exit 0; fi
   cp "$RULES" "$RULES.sfvr-backup"
   sed -i "/^$BEGIN\$/,/^$END\$/d" "$RULES"
+  unredirect
   ufw reload
   echo "removed: 443 no longer reaches the rooms server ($RULES.sfvr-backup has the old rules)"
   exit 0
 fi
 
 if grep -qF "$BEGIN" "$RULES"; then
-  echo "already there: TCP 443 goes to port $PORT"
-  exit 0
+  if grep -qF -- '--dst-type LOCAL' "$RULES"; then
+    echo "already there: TCP 443 goes to port $PORT"
+    exit 0
+  fi
+  # An older redirect, for every connection on 443 (also Docker containers'
+  # outgoing HTTPS): replaced by this one.
+  echo "replacing the older redirect"
+  cp "$RULES" "$RULES.sfvr-backup"
+  sed -i "/^$BEGIN\$/,/^$END\$/d" "$RULES"
+  unredirect
 fi
 # Something else on 443 (a web server) would lose its traffic to the redirect.
 if ss -Hltn 'sport = :443' | grep -q .; then
@@ -45,7 +61,7 @@ fi
 # A *nat section of someone else's: merge by hand rather than writing a second one.
 if grep -q '^\*nat' "$RULES"; then
   echo "$RULES already has a *nat section; add this line to its PREROUTING rules by hand, then sudo ufw reload:"
-  echo "  -A PREROUTING -p tcp --dport 443 -j REDIRECT --to-ports $PORT"
+  echo "  -A PREROUTING -p tcp --dport 443 -m addrtype --dst-type LOCAL -j REDIRECT --to-ports $PORT"
   exit 1
 fi
 
@@ -56,7 +72,10 @@ tmp=$(mktemp)
   echo "$BEGIN"
   echo '*nat'
   echo ':PREROUTING ACCEPT [0:0]'
-  echo "-A PREROUTING -p tcp --dport 443 -j REDIRECT --to-ports $PORT"
+  # Only connections to this machine's own addresses: Docker's containers
+  # (docker/) send their outgoing HTTPS through PREROUTING too, and without
+  # this their builds and downloads were sent to the rooms server.
+  echo "-A PREROUTING -p tcp --dport 443 -m addrtype --dst-type LOCAL -j REDIRECT --to-ports $PORT"
   echo 'COMMIT'
   echo "$END"
   cat "$RULES"

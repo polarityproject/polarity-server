@@ -117,11 +117,13 @@ repository into this one (it writes `deploy/keeper/`):
 D:\SteamLibrary\steamapps\common\StreetFighterV\sfv-rollback\scripts\keeper-bundle.ps1
 ```
 
-Then pack this repository (the `rooms` branch) and copy it over:
+Commit that, then pack the `rooms` branch and copy it over. `git archive`
+packs committed files only, so a test key or settings file left in
+`docker/` from trying the stack on your PC stays there:
 
 ```powershell
 cd D:\SteamLibrary\steamapps\common\StreetFighterV
-tar -czf sfvr-rooms.tgz --exclude=.git -C sfvr-server .
+git -C sfvr-server archive --format=tar.gz -o ..\sfvr-rooms.tgz rooms
 scp sfvr-rooms.tgz polarityadmin@203.0.113.10:~
 ```
 
@@ -249,10 +251,27 @@ Logs rotate on their own (10 MB, 5 files per container).
 
 ## Tested
 
-2026-11-04, on a Windows PC with Docker Desktop (the stack with
-`compose.local.yaml`, which publishes the ports instead of host networking):
-both images built (the keeper's first Linux build), the keeper made its key
-and connected, and two game instances played a table set through it (tickets,
-result, the next call; 0 desyncs); the keeper read its state back after a
-restart. Not yet tried on a real VPS: host networking, the ufw scripts with
-Docker beside them, and minting with a real Cloudflare key.
+2026-11-04, on a Windows PC with Docker Desktop:
+
+- **The stack** (`compose.local.yaml`, ports published): both images built
+  (the keeper's first Linux build); 0.2.x (main) and rooms builds played
+  Direct Match through the server with the keeper beside it (session.ps1 and
+  rematch-test.ps1: 4 matches each, 0 desyncs); two games played table sets
+  through the keeper; 22 bots ran 151 sets in 2 minutes over 10 tables, 0
+  missed calls, the keeper at 3.5 s of CPU and 7 MB.
+- **A stand-in VPS** (a privileged Ubuntu 24.04 container with its own
+  Docker): this guide's steps 3–9 as written, `git archive` copy included,
+  with host networking and ufw. Table sets on 5555 and on 443 (the redirect
+  counted the connections), 0 desyncs. The keeper updated mid-set (`up -d
+  --force-recreate keeper`): the room paused, the game handed it back, the
+  set finished and the table was called again. A server restart: the keeper
+  reconnected in 5 s with a new lobby channel. A bogus Cloudflare key: the
+  minter logged the failure and the server kept STUN. The name filter word
+  showed a matching name as "Player 3".
+- **Found and fixed**: `port-443.sh` redirected every TCP 443 connection,
+  also Docker containers' outgoing HTTPS, so image builds could not reach
+  GitHub; it now redirects only connections to the machine itself, and
+  replaces the older rule when run again.
+
+Not tried: a real VPS and its provider's firewall, internet NAT between
+players and the keeper, and minting with a real Cloudflare key.
