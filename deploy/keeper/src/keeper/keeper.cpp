@@ -774,6 +774,8 @@ void Keeper::WriteTables(Room& room)
     if (!room.host) return;
     for (int i = 0; i < static_cast<int>(room.tables.size()); i++) {
         Table& t = room.tables[i];
+        t.s.again = t.s.phase == TablePhase::Playing && t.queue.empty() && room.members.count(t.s.seat[0]) &&
+                    room.members.count(t.s.seat[1]);
         const std::string state = FormatTable(t.s), queue = FormatIds(t.queue);
         if (state + "\n" + queue == t.written) continue;
         t.written = state + "\n" + queue;
@@ -785,12 +787,17 @@ void Keeper::WriteTables(Room& room)
 
 void Keeper::Ticket(Room& room, uint32_t to, const TableTicket& ticket, int64_t nowMs)
 {
+    Log("keeper: room %s: ticket to %u: %s", room.code.c_str(), to, FormatTicket(ticket).c_str());
+    Notice(room, to, "ticket", true, FormatTicket(ticket), nowMs);
+}
+
+void Keeper::Notice(Room& room, uint32_t to, const std::string& kind, bool ok, const std::string& text, int64_t nowMs)
+{
     // Sent again until acknowledged, as an answer is; numbered after the
     // player's last request, so their acknowledgement covers it.
     const auto m = room.members.find(to);
     const uint32_t seq = m != room.members.end() ? m->second.lastSeq + 1000000 : 1;
-    Log("keeper: room %s: ticket to %u: %s", room.code.c_str(), to, FormatTicket(ticket).c_str());
-    room.outbox.push_back({to, seq, FormatAnswer({seq, "ticket", true, FormatTicket(ticket)}), nowMs, nowMs + kConnectMs});
+    room.outbox.push_back({to, seq, FormatAnswer({seq, kind, ok, text}), nowMs, nowMs + kConnectMs});
     SendOutbox(room, nowMs);
 }
 
@@ -937,6 +944,47 @@ void Keeper::TableRequest(Room& room, Member& m, const Request& r, int64_t nowMs
             t->phaseAtMs = nowMs;
             Log("keeper: room %s: table %d: %u beat %u by forfeit (%d-%d)", room.code.c_str(), index + 1, t->s.lastWinner,
                 t->s.lastLoser, t->s.lastScore[0], t->s.lastScore[1]);
+        }
+    }
+    else if (r.kind == "again" && t && r.args.size() == 3 && t->s.phase == TablePhase::Playing && seatOf(*t) == 0) {
+        // The set is won and both want more. Nobody else waits for the
+        // table: the result goes on record and the same two play the next
+        // set in the same match room, in the same seats (the rotation only
+        // matters with someone waiting; the stays limit does not count it).
+        const uint8_t games[2] = {static_cast<uint8_t>(std::clamp(std::atoi(r.args[1].c_str()), 0, 99)),
+                                  static_cast<uint8_t>(std::clamp(std::atoi(r.args[2].c_str()), 0, 99))};
+        const bool alone = t->queue.empty() && room.members.count(t->s.seat[0]) && room.members.count(t->s.seat[1]);
+        if (alone && games[0] != games[1]) {
+            const int w = games[0] > games[1] ? 0 : 1;
+            t->s.lastWinner = t->s.seat[w];
+            t->s.lastLoser = t->s.seat[1 - w];
+            t->s.lastScore[0] = games[w];
+            t->s.lastScore[1] = games[1 - w];
+            t->s.wins[0] = t->s.wins[1] = 0;
+            t->setRules = t->rules;
+            t->phaseAtMs = nowMs;
+            Log("keeper: room %s: table %d: %u beat %u %d-%d; nobody waiting, the same two play on (%s)", room.code.c_str(),
+                index + 1, t->s.lastWinner, t->s.lastLoser, t->s.lastScore[0], t->s.lastScore[1], FormatRules(t->setRules).c_str());
+            for (int seat = 0; seat < 2; seat++) Notice(room, t->s.seat[seat], "again", true, FormatRules(t->setRules), nowMs);
+            // Its relay carries on (the same match room) to the next set's end.
+            for (auto& rl : room.relays) {
+                if (!rl->ended && rl->matchCode == t->s.code && rl->core) rl->core->SetFirstTo(t->setRules.firstTo);
+            }
+        }
+        else {
+            // Someone waits (or it did not finish): the set ends as a result does.
+            if (games[0] == games[1]) {
+                Log("keeper: room %s: table %d's set did not finish; calling it again", room.code.c_str(), index + 1);
+                Fill(room, *t, nowMs, true);
+            }
+            else {
+                ApplySetResult(t->setRules, games[0] > games[1] ? 0 : 1, games, &t->s, &t->queue);
+                t->s.watch.clear();
+                t->phaseAtMs = nowMs;
+                Log("keeper: room %s: table %d: %u beat %u %d-%d (someone is waiting: no next set for the same two)", room.code.c_str(),
+                    index + 1, t->s.lastWinner, t->s.lastLoser, t->s.lastScore[0], t->s.lastScore[1]);
+            }
+            Notice(room, m.id, "again", false, "someone is waiting", nowMs);
         }
     }
     else if (r.kind == "rules" && t && r.args.size() == 2 && m.id == room.owner) {

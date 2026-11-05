@@ -195,6 +195,9 @@ private:
     void WriteTables(Room& room);
     void OffTables(Room& room, uint32_t id, int64_t nowMs);
     void Ticket(Room& room, uint32_t to, const TableTicket& ticket, int64_t nowMs);
+    // A word to a player unasked (a ticket, the again answer to both): sent
+    // until acknowledged.
+    void Notice(Room& room, uint32_t to, const std::string& kind, bool ok, const std::string& text, int64_t nowMs);
     std::mt19937_64 rng_{std::random_device{}()};
     void SaveState();
     std::vector<std::string> LoadState();

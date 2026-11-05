@@ -251,6 +251,12 @@ void SpectateRelay::AddStateData(Game& g, const lobby::Message& m)
 
 void SpectateRelay::CheckDecided()
 {
+    // The same two play on into a next set (keeper again): the score starts
+    // over, and the set's end is to come again.
+    if (decided_ && haveState_ && state_.seats[0].wins < config_.firstTo && state_.seats[1].wins < config_.firstTo) {
+        decided_ = false;
+        Log("relay: the next set");
+    }
     if (decided_ || config_.firstTo <= 0 || !haveState_) return;
     if (state_.seats[0].wins >= config_.firstTo || state_.seats[1].wins >= config_.firstTo) {
         decided_ = true;

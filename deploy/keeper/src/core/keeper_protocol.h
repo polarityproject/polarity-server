@@ -218,6 +218,10 @@ struct TableState {
     // The keeper's relay room for the running set (M5): viewers watch there,
     // never in the match room. It stays while the relay serves viewers behind.
     std::string watch;
+    // Playing with nobody else waiting for the table (its queue empty, both
+    // players in the room): when the set is won its players may play on
+    // into the next set without leaving the match (request again).
+    bool again = false;
     bool operator==(const TableState&) const = default;
 };
 std::string StateKey(int table); // "s0"
@@ -250,6 +254,11 @@ bool LeaveTable(uint32_t id, TableState* s, std::vector<uint32_t>* queue);
 //   code:<table>:<code>     P1's: the match room is open on this code
 //   score:<table>:<w1>:<w2> P1's: the set's score after each game
 //   result:<table>:<w1>:<w2>  P1's (or P2's when P1 is gone): the set ended; w1 = w2 = 0: it failed
+//   again:<table>:<w1>:<w2>  P1's: the set is won (w1, w2) and both chose to play on: with
+//                           nobody waiting (TableState::again) the keeper records it and the
+//                           same two start the next set in the same match room (answer
+//                           kind "again" to both: ok with the next set's rules; else no, and
+//                           the set's result stands as a result's would)
 //   rules:<table>:<rules>   the owner's: a table's rules, from its next set
 //   kick:<member>           the owner's: out of the room (M6)
 // The keeper's ticket (answer kind "ticket"), privately to each player:

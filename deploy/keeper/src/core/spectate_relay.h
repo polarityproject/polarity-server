@@ -62,6 +62,8 @@ public:
     void SetHost(uint64_t id, uint64_t build);
     // The build viewers must have, before the host is known (its code report).
     void SetBuild(uint64_t build) { build_ = build; }
+    // The same two play on (keeper again): the next set's target.
+    void SetFirstTo(int firstTo) { config_.firstTo = firstTo; }
     void FromHost(const lobby::Message& m, int64_t nowMs);
     // The host left the match room (or its link is gone).
     void HostGone(int64_t nowMs);
