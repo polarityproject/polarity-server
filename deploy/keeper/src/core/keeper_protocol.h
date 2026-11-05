@@ -215,6 +215,9 @@ struct TableState {
     // players' games are still coming back from the battle.
     uint32_t call = 0;
     uint8_t callSeconds = 0;
+    // The keeper's relay room for the running set (M5): viewers watch there,
+    // never in the match room. It stays while the relay serves viewers behind.
+    std::string watch;
     bool operator==(const TableState&) const = default;
 };
 std::string StateKey(int table); // "s0"

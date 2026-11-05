@@ -57,8 +57,12 @@ constexpr size_t kRegionsPerRequest = 200;
 constexpr size_t kStateChunk = 900;
 constexpr size_t kInputsPerMessage = 60;
 // The session's matches a host keeps for spectators (streams and starting
-// states): one Matches message holds them all.
-constexpr size_t kKeptMatches = 12;
+// states): a table's set of first to 20 has up to 39 games, and a late viewer
+// starts at its first (M5). The list goes out in slices of
+// kMatchesPerMessage (about 60 bytes an entry: one datagram), each with its
+// place in the list (Message::sliceAt, sliceOf).
+constexpr size_t kKeptMatches = 40;
+constexpr size_t kMatchesPerMessage = 12; // also what builds before M5 accept in one
 // Bytes of UTF-8: a 32-character Steam name in Japanese takes up to 96.
 constexpr size_t kMaxName = 96;
 constexpr size_t kMaxText = 200; // a Bye's reason
@@ -87,6 +91,7 @@ enum class RejectReason : uint8_t {
     Busy = 3,
     ProtocolMismatch = 4,
     NoSpectators = 5,
+    ViaKeeper = 6, // a table set: viewers watch in the keeper's relay room, not here
 };
 enum class Role : uint8_t { Player = 0, Spectator = 1 };
 // A player's answer to the post-match menu.
@@ -143,6 +148,9 @@ struct Message {
     std::string name;         // Hello: the joiner's; Accept: the host's
     bool reports = false;     // Hello, Accept: the sender sends desync reports (report_upload.h)
     uint64_t seatToken = 0;   // Hello: the P2 seat's token from the joiner's ticket (match_ticket.h); 0: none
+    // Bye: the sender gives up the table set it was playing (match_ticket.h):
+    // the other player wins it.
+    bool forfeit = false;
     // PlayerState (the sender's seat; its name and wins are not used)
     Seat seat;
     // PlayerState, SessionState: heartbeat timestamps (ms, the sender's clock)
@@ -180,11 +188,20 @@ struct Message {
     // Inputs: frames first .. first + frames.size() - 1; InputsAck: `first`
     // is the next frame wanted
     std::vector<FrameRecord> frames;
+    // InputsAck: the spectator's next frame to play, and whether its battle
+    // has reached the result (the keeper's relay says Bye once a viewer is
+    // there on the set's last game; `first` only says what it has in hand).
+    // After `first`: builds before the relay stop reading there (playedTo 0).
+    uint32_t playedTo = 0;
+    bool decided = false;
     // Bye: why the sender ends the session, worded for the other side; empty
     // when it just left
     std::string text;
-    // Matches: the host's kept matches, oldest first (at most kKeptMatches)
+    // Matches: a slice of the host's kept matches, oldest first (at most
+    // kMatchesPerMessage), from list index sliceAt of sliceOf in all. Builds
+    // before M5 sent the whole list (sliceAt 0, sliceOf its size).
     std::vector<MatchEntry> matches;
+    uint8_t sliceAt = 0, sliceOf = 0;
     // Reject
     RejectReason reason = RejectReason::WrongCode;
 };

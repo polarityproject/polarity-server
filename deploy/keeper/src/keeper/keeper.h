@@ -13,6 +13,7 @@
 // tests, Linux on the server).
 
 #include "core/keeper_protocol.h"
+#include "core/spectate_relay.h"
 #include "keeper/sign.h"
 
 #include <cstdint>
@@ -39,6 +40,9 @@ struct KeeperOptions {
     // The local UDP ports of its P2P links (--ports 47200-47299): the server's
     // firewall opens this range. 0 0: any.
     uint16_t portBegin = 0, portEnd = 0;
+    // Every link on one UDP socket (in that range) instead of a port each:
+    // a port per link ran out at about 100 links. Off: --per-link-ports.
+    bool linkMux = true;
     // The name filter's words (FoldName'd; --words <file>, one a line): a
     // public room shows those names as "Player N".
     std::vector<std::string> words;
@@ -80,6 +84,28 @@ private:
         int64_t untilMs = 0;
     };
     enum class Kind { Lobby, Custom };
+    // A table set's spectator relay (core/spectate_relay.h): the host of a
+    // room of its own (`down`) where every viewer of the set watches, and,
+    // from its first viewer on, a member of the set's match room (`up`, the
+    // host streams to it alone; with nobody watching, P1 streams to nobody).
+    // It outlives the set while viewers behind still play its games.
+    struct RelayLink {
+        int table = -1;
+        std::string matchCode;
+        std::string relayCode;
+        WeyveClient* up = nullptr;
+        WeyveClient* down = nullptr;
+        bool upIn = false, downIn = false;
+        uint32_t hostId = 0;
+        bool hostSet = false;
+        std::vector<std::pair<std::string, std::string>> data; // the match room's build keys, for the relay room
+        bool published = false; // the relay room is the table's `watch`
+        std::unique_ptr<SpectateRelay> core;
+        int64_t startedMs = 0;
+        int64_t upStartedMs = -1; // joined the match room (on the first viewer); -1 not yet
+        int64_t statsMs = 0;
+        bool ended = false;
+    };
     // A table of a custom room (keeper_protocol.h TableState): its state and
     // queue are written to room data; the rest is the keeper's own.
     struct Table {
@@ -88,6 +114,7 @@ private:
         Rules rules;          // t<n>: the next set's
         Rules setRules;       // the running set's (fixed when it was called)
         uint64_t token = 0;   // the running set's P2 seat token
+        std::string build;    // P1's build (its code report), for the relay room
         int64_t phaseAtMs = 0; // when the phase began (its time limit)
         std::string written;  // s<n> and q<n> as last written
     };
@@ -99,6 +126,7 @@ private:
         bool host = false;
         bool setUp = false;    // host and its data written
         bool joinAsked = false;
+        bool lobbyListAsked = false; // the lobby: looking for one of its build to adopt (FindLobby)
         std::vector<uint32_t> order; // members by join time, oldest first
         std::map<uint32_t, Member> members;
         std::deque<Outgoing> outbox;
@@ -117,10 +145,20 @@ private:
         std::vector<uint32_t> masked; // members whose names the filter rejected (public rooms)
         std::vector<Table> tables;
         bool unlisted = false; // the operator took it off the public list
+        std::vector<std::unique_ptr<RelayLink>> relays;
     };
 
     void Log(const char* format, ...) const;
     bool Connect(Room& room);
+    WeyveClient* NewClient();
+    // Relays.
+    void StartRelay(Room& room, int table, int64_t nowMs);
+    void PumpRelays(Room& room, int64_t nowMs);
+    void PumpRelayUp(Room& room, RelayLink& r, int64_t nowMs);
+    void PumpRelayDown(Room& room, RelayLink& r, int64_t nowMs);
+    void EndRelay(Room& room, RelayLink& r, const char* why);
+    void FindLobby(Room& room);
+    void OnLobbyList(Room& room);
     void Pump(Room& room, int64_t nowMs);
     void OnInRoom(Room& room, const std::string& code, int64_t nowMs);
     void SetUpAsHost(Room& room, int64_t nowMs);

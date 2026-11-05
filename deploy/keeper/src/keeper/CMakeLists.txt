@@ -34,6 +34,12 @@ execute_process(COMMAND ${CMAKE_COMMAND} -DPATCH=${SFVR_ROOT}/third_party/weyvel
 if(NOT port_range EQUAL 0)
   message(FATAL_ERROR "cannot apply third_party/weyvelength-port-range.patch")
 endif()
+execute_process(COMMAND ${CMAKE_COMMAND} -DPATCH=${SFVR_ROOT}/third_party/weyvelength-link-mux.patch
+                        -P ${SFVR_ROOT}/cmake/apply-patch.cmake
+                WORKING_DIRECTORY ${weyvelength_SOURCE_DIR} RESULT_VARIABLE link_mux)
+if(NOT link_mux EQUAL 0)
+  message(FATAL_ERROR "cannot apply third_party/weyvelength-link-mux.patch")
+endif()
 
 set(NO_SERVER ON CACHE BOOL "" FORCE)
 set(NO_TESTS ON CACHE BOOL "" FORCE)
@@ -55,6 +61,8 @@ add_executable(sfvr-keeper
   ${SFVR_ROOT}/src/keeper/keeper.cpp
   ${SFVR_ROOT}/src/keeper/sign.cpp
   ${SFVR_ROOT}/src/core/keeper_protocol.cpp
+  ${SFVR_ROOT}/src/core/lobby.cpp
+  ${SFVR_ROOT}/src/core/spectate_relay.cpp
   ${SFVR_ROOT}/src/core/rules.cpp)
 target_include_directories(sfvr-keeper PRIVATE ${SFVR_ROOT}/src)
 target_link_libraries(sfvr-keeper PRIVATE weyvelength_client OpenSSL::Crypto Threads::Threads)

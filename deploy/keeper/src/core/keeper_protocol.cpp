@@ -434,13 +434,14 @@ std::string FormatTable(const TableState& s)
            std::to_string((s.ready[0] ? 1 : 0) | (s.ready[1] ? 2 : 0)) + "|" + std::to_string(s.wins[0]) + "|" +
            std::to_string(s.wins[1]) + "|" + s.code + "|" + std::to_string(s.stayer) + "|" + std::to_string(s.streak) + "|" +
            std::to_string(s.lastWinner) + "|" + std::to_string(s.lastLoser) + "|" + std::to_string(s.lastScore[0]) + "|" +
-           std::to_string(s.lastScore[1]) + "|" + std::to_string(s.call) + "|" + std::to_string(s.callSeconds);
+           std::to_string(s.lastScore[1]) + "|" + std::to_string(s.call) + "|" + std::to_string(s.callSeconds) + "|" + s.watch;
 }
 
 bool ParseTable(std::string_view text, TableState* out)
 {
     const auto f = Split(text, '|');
-    if (f.size() != 15 || f[0].size() != 1) return false;
+    // 16 fields since the relay (its room last); 15 before.
+    if ((f.size() != 15 && f.size() != 16) || f[0].size() != 1) return false;
     TableState s;
     const char p = f[0][0];
     if (p != 'o' && p != 'c' && p != 'n' && p != 'p' && p != 'a') return false;
@@ -465,6 +466,7 @@ bool ParseTable(std::string_view text, TableState* out)
     s.lastScore[1] = static_cast<uint8_t>(std::min<int64_t>(n[11], 99));
     s.call = static_cast<uint32_t>(n[12]);
     s.callSeconds = static_cast<uint8_t>(std::min<int64_t>(n[13], 99));
+    if (f.size() == 16) s.watch = std::string(f[15]);
     *out = std::move(s);
     return true;
 }

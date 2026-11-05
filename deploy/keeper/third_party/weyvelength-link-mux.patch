@@ -1,0 +1,104 @@
+--- a/Client/include/private/client.h
++++ b/Client/include/private/client.h
+@@ -64,6 +64,7 @@
+ 		const std::string* TurnHost() const; // the first TURN server handed to us, or null
+ 		void SetRelayOnly(bool on); // testing: take only a peer's relay candidates, so links go through TURN
+ 		void SetPortRange(uint16_t begin, uint16_t end); // links built from now on bind a local UDP port in [begin, end]; 0 0: any
++		void SetLinkMux(bool on); // links built from now on share one UDP socket (no TURN on this side)
+ 
+ 		uint32_t Id() const;  // 0 until the server has assigned one
+ 		const std::string& Name() const; // our own name, as the server accepted it
+@@ -119,6 +120,7 @@
+ 		Proto::IceServers _ice; // handed to us by the server; feeds every new link
+ 		bool _relay_only = false;
+ 		uint16_t _port_begin = 0, _port_end = 0;
++		bool _link_mux = false;
+ 
+ 		std::queue<Proto::ServerMessage> _inbox;
+ 		std::queue<std::pair<uint32_t, Proto::P2PMessage>> _p2p_inbox;
+--- a/Client/include/weyvelength.h
++++ b/Client/include/weyvelength.h
+@@ -229,6 +229,11 @@
+ // Links built from now on bind their local UDP port in [begin, end] (a
+ // server behind a firewall opens that range); 0 and 0: any port.
+ WEYVE_API void weyve_set_port_range(WeyveClient* client, uint16_t begin, uint16_t end);
++// Links built from now on share one local UDP socket (in the port range when
++// one is set) instead of one socket each: for a server-side peer with many
++// links. This side then gathers no TURN candidates (a peer's relay still
++// reaches it), so it suits a peer with a public address.
++WEYVE_API void weyve_set_link_mux(WeyveClient* client, bool on);
+ 
+ // --- cached room state ---
+ // Getters below read the client's cache; nothing blocks or hits the network.
+--- a/Client/src/p2p_mesh.cpp
++++ b/Client/src/p2p_mesh.cpp
+@@ -121,6 +121,11 @@
+ 		_port_end = end;
+ 	}
+ 
++	void Client::SetLinkMux(bool on)
++	{
++		_link_mux = on;
++	}
++
+ 	void Client::SetRelayOnly(bool on)
+ 	{
+ 		_relay_only = on;
+@@ -165,11 +170,14 @@
+ 		}
+ 
+ 		juice_config_t config{};
+-		config.concurrency_mode = JUICE_CONCURRENCY_MODE_POLL; // every link shares one juice thread
++		// every link shares one juice thread; mux: one socket too
++		config.concurrency_mode = _link_mux ? JUICE_CONCURRENCY_MODE_MUX : JUICE_CONCURRENCY_MODE_POLL;
+ 		if (!_ice.stun_host.empty()) {
+ 			config.stun_server_host = _ice.stun_host.c_str();
+ 			config.stun_server_port = _ice.stun_port;
+ 		}
++		if (_link_mux)
++			turn.clear(); // libjuice has no TURN in mux mode
+ 		config.turn_servers = turn.empty() ? nullptr : turn.data();
+ 		config.turn_servers_count = (int)turn.size();
+ 		config.local_port_range_begin = _port_begin;
+@@ -195,10 +203,15 @@
+ 		if (juice_get_local_description(link.agent, sdp, sizeof(sdp)) != JUICE_ERR_SUCCESS)
+ 			return false;
+ 
++		// gathering binds the link's socket: the description goes only once it
++		// has one, or a peer would answer a link that cannot come up (and that
++		// answer starts another one that fails, again and again)
++		if (juice_gather_candidates(link.agent) != JUICE_ERR_SUCCESS)
++			return false;
+ 		// relay only: none of this side's own addresses either, or a peer without
+ 		// relay only reaches them directly and the link comes up peer to peer
+ 		SendServer(Proto::P2PSignal{ id, Proto::P2PSignalKind::Description, _relay_only ? KeepRelayCandidates(sdp) : std::string{ sdp } });
+-		return juice_gather_candidates(link.agent) == JUICE_ERR_SUCCESS;
++		return true;
+ 	}
+ 
+ 	void Client::FlushLink(PeerLink& link)
+@@ -272,8 +285,8 @@
+ 			link->remote_set = true;
+ 		}
+ 
+-		if (answering)
+-			ShareLink(*link, sig.id); // remote set first = we take the controlled role
++		if (answering && !ShareLink(*link, sig.id)) // remote set first = we take the controlled role
++			DestroyLink(sig.id); // no socket: no answer
+ 	}
+ 
+ 	void Client::PollPeers()
+--- a/Client/src/weyvelength.cpp
++++ b/Client/src/weyvelength.cpp
+@@ -195,6 +195,11 @@
+ 	client->client.SetPortRange(begin, end);
+ }
+ 
++void weyve_set_link_mux(WeyveClient* client, bool on)
++{
++	client->client.SetLinkMux(on);
++}
++
+ // --- cached room state ---
+ 
+ uint32_t weyve_id(const WeyveClient* client)

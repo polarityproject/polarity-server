@@ -1,6 +1,6 @@
 // sfvr-keeper: see keeper.h.
 //
-//   sfvr-keeper --key <file> [--server host:port] [--state <file>] [--words <file>] [--ports A-B] [--protocol N]
+//   sfvr-keeper --key <file> [--server host:port] [--state <file>] [--words <file>] [--ports A-B] [--per-link-ports] [--protocol N]
 //   sfvr-keeper --new-key <file>    writes a key, prints its public half
 //
 // Logs to stdout (the journal on the server).
@@ -51,7 +51,7 @@ void LogLine(const std::string& line)
 int Usage()
 {
     std::fprintf(stderr,
-                 "usage: sfvr-keeper --key <file> [--server host:port] [--state <file>] [--words <file>] [--ports A-B] [--protocol N]\n"
+                 "usage: sfvr-keeper --key <file> [--server host:port] [--state <file>] [--words <file>] [--ports A-B] [--per-link-ports] [--protocol N]\n"
                  "       sfvr-keeper --new-key <file>\n");
     return 2;
 }
@@ -108,6 +108,7 @@ int main(int argc, char** argv)
             o.portBegin = static_cast<uint16_t>(std::atoi(r.c_str()));
             o.portEnd = dash == std::string::npos ? o.portBegin : static_cast<uint16_t>(std::atoi(r.c_str() + dash + 1));
         }
+        else if (a == "--per-link-ports") o.linkMux = false;
         else if (a == "--server" && hasValue) {
             std::string s = argv[++i];
             const size_t colon = s.rfind(':');
