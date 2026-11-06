@@ -1,0 +1,83 @@
+# Alert rules (Prometheus evaluates them; they show under Alerts in
+# Prometheus and on the dashboards). No notifications are sent yet: a
+# Grafana contact point (Discord webhook, email) can be added later.
+groups:
+  - name: keeper
+    rules:
+      - alert: KeeperMetricsStale
+        expr: time() - node_textfile_mtime_seconds{file=~".*keeper.prom"} > 60 or absent(node_textfile_mtime_seconds{file=~".*keeper.prom"})
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: The keeper has not written its metrics for a minute (stopped, stuck, or its loop is blocked).
+      - alert: KeeperLobbyDown
+        expr: sfvr_keeper_lobby_up == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: The keeper does not host the lobby channel (players cannot make or find rooms).
+      - alert: KeeperStepsSlow
+        expr: sfvr_keeper_step_max_seconds > 0.25
+        for: 2m
+        labels: {severity: warning}
+        annotations:
+          summary: "A keeper step took {{ $value | humanizeDuration }}: answers, calls and tickets wait that long."
+      - alert: KeeperLoopBusy
+        expr: rate(sfvr_keeper_step_seconds_sum[5m]) > 0.5
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "The keeper's loop is busy {{ $value | humanizePercentage }} of the time (one thread: near 100% it falls behind)."
+      - alert: KeeperLoggingBlocks
+        expr: rate(sfvr_keeper_log_seconds_total[5m]) > 0.1
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "The keeper spends {{ $value | humanizePercentage }} of its time writing log lines."
+      - alert: KeeperResending
+        expr: rate(sfvr_keeper_resends_total[5m]) > 5
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: Players are not acknowledging the keeper's answers in time (links slow or lost).
+
+  - name: host
+    rules:
+      - alert: HostCpuHigh
+        expr: 1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) > 0.9
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "The VPS's CPU is {{ $value | humanizePercentage }} busy."
+      - alert: HostMemoryLow
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.1
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "Only {{ $value | humanizePercentage }} of the VPS's memory is free."
+      - alert: HostDiskLow
+        expr: node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"} < 0.1
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "Only {{ $value | humanizePercentage }} of the VPS's disk is free."
+      - alert: ContainerDown
+        expr: sfvr_container_up{service=~"server|ice|keeper"} == 0
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "The {{ $labels.service }} container is not running."
+      - alert: ContainerRestarting
+        expr: increase(sfvr_container_restarts[15m]) > 2
+        labels: {severity: warning}
+        annotations:
+          summary: "The {{ $labels.service }} container restarted {{ $value }} times in 15 minutes."
+
+  - name: rooms-api
+    rules:
+      - alert: RoomsPublisherFailing
+        expr: increase(sfvr_publisher_failures_total[10m]) > 5 or time() - sfvr_publisher_last_success_seconds > 300
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: The public room list has not reached the rooms API for 5 minutes.

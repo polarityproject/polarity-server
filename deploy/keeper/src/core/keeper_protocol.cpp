@@ -241,6 +241,81 @@ std::vector<ListedRoom> UnpackRoomList(const std::map<std::string, std::string>&
     return rooms;
 }
 
+namespace {
+
+// A JSON string: quotes, backslashes and control characters escaped, and
+// bytes that are not valid UTF-8 (names are players' own) as U+FFFD.
+void JsonString(std::string& out, std::string_view s)
+{
+    out += '"';
+    for (size_t i = 0; i < s.size();) {
+        const unsigned char c = static_cast<unsigned char>(s[i]);
+        if (c < 0x80) {
+            if (c == '"' || c == '\\') { out += '\\'; out += static_cast<char>(c); }
+            else if (c < 0x20) {
+                char esc[8];
+                std::snprintf(esc, sizeof(esc), "\\u%04x", c);
+                out += esc;
+            }
+            else out += static_cast<char>(c);
+            i++;
+            continue;
+        }
+        const size_t len = c > 0xF4 ? 0 : c >= 0xF0 ? 4 : c >= 0xE0 ? 3 : c >= 0xC2 ? 2 : 0;
+        bool ok = len && i + len <= s.size();
+        for (size_t k = 1; ok && k < len; k++) ok = (static_cast<unsigned char>(s[i + k]) & 0xC0) == 0x80;
+        if (ok && len == 3) {
+            const unsigned char c1 = static_cast<unsigned char>(s[i + 1]);
+            ok = !(c == 0xE0 && c1 < 0xA0) && !(c == 0xED && c1 >= 0xA0); // overlong, surrogates
+        }
+        if (ok && len == 4) {
+            const unsigned char c1 = static_cast<unsigned char>(s[i + 1]);
+            ok = !(c == 0xF0 && c1 < 0x90) && !(c == 0xF4 && c1 >= 0x90);
+        }
+        if (ok) {
+            out.append(s.substr(i, len));
+            i += len;
+        }
+        else {
+            out += "\xEF\xBF\xBD";
+            i++;
+        }
+    }
+    out += '"';
+}
+
+} // namespace
+
+std::string FormatRoomListJson(const std::vector<ListedRoom>& rooms, const RoomTotals& totals, int64_t unixMs)
+{
+    std::string out = "{\"version\":1,\"updated\":" + std::to_string(unixMs) + ",\"totals\":{";
+    out += "\"lobby\":" + std::to_string(totals.lobbyMembers) + ",\"rooms\":" + std::to_string(totals.rooms) +
+           ",\"public_rooms\":" + std::to_string(totals.publicRooms) + ",\"players\":" + std::to_string(totals.players) +
+           ",\"tables\":" + std::to_string(totals.tables) + ",\"tables_playing\":" + std::to_string(totals.tablesPlaying) +
+           "},\"rooms\":[";
+    for (size_t i = 0; i < rooms.size(); i++) {
+        const ListedRoom& r = rooms[i];
+        if (i) out += ',';
+        out += "{\"code\":";
+        JsonString(out, r.code);
+        out += ",\"preset\":";
+        JsonString(out, PresetName(r.preset));
+        out += ",\"owner\":";
+        JsonString(out, r.owner);
+        out += ",\"members\":" + std::to_string(r.members) + ",\"capacity\":" + std::to_string(kRoomCap) +
+               ",\"tables\":" + std::to_string(r.tables) + ",\"open_seats\":" + std::to_string(r.openSeats) + ",\"rules\":";
+        JsonString(out, r.rules);
+        out += ",\"faces\":[";
+        for (size_t f = 0; f < r.faces.size(); f++) {
+            if (f) out += ',';
+            JsonString(out, r.faces[f]);
+        }
+        out += "]}";
+    }
+    out += "]}";
+    return out;
+}
+
 size_t Utf8Length(std::string_view text)
 {
     size_t n = 0;

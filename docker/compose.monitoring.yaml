@@ -1,0 +1,158 @@
+# The rooms VPS's monitoring, beside compose.yaml (docs/rooms-vps-docker.md,
+# "Monitoring"):
+#   docker compose -f compose.yaml -f compose.monitoring.yaml up -d --build
+#
+#   node-exporter  the VPS's health, and the keeper's metrics file (textfile)
+#   container-stats  CPU, memory and restarts per container (the Docker API)
+#   prometheus     keeps the metrics 30 days; the alert rules (monitoring/rules.yml)
+#   loki           keeps the logs 14 days
+#   alloy          sends every container's log and the host's journal to loki
+#   grafana        the dashboards (monitoring/dashboards)
+#   publisher      sends the keeper's public room list to the rooms API
+#                  (cloudflare/rooms-api) every 10 s
+#
+# Everything listens on 127.0.0.1 only: nothing new is reachable from outside.
+# Grafana through an SSH tunnel:
+#   ssh -L 3000:127.0.0.1:3000 polarityadmin@<vps>   then http://localhost:3000
+name: sfvr-rooms
+
+x-watcher: &watcher
+  network_mode: host
+  restart: unless-stopped
+  read_only: true
+  security_opt: ["no-new-privileges:true"]
+  tmpfs: ["/tmp"]
+  logging:
+    driver: json-file
+    options: {max-size: "10m", max-file: "3"}
+
+services:
+  node-exporter:
+    <<: *watcher
+    image: prom/node-exporter:v1.8.2
+    pid: host
+    cap_drop: [ALL]
+    # The keeper's group: its /data volume (0750) holds keeper.prom.
+    user: "65534:10001"
+    command:
+      - --web.listen-address=127.0.0.1:9100
+      - --path.rootfs=/host
+      - --collector.textfile.directory=/keeper
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|run|sys|var/lib/docker/.+)($|/)
+    volumes:
+      - "/:/host:ro,rslave"
+      - "keeper:/keeper:ro"
+    mem_limit: 64m
+
+  container-stats:
+    <<: *watcher
+    build: {context: ./container-stats}
+    image: sfvr-rooms/container-stats:latest
+    # Root without capabilities, for the Docker socket (read-only: it only
+    # lists containers and reads their stats).
+    cap_drop: [ALL]
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    mem_limit: 64m
+  prometheus:
+    <<: *watcher
+    image: prom/prometheus:v2.55.1
+    cap_drop: [ALL]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --web.listen-address=127.0.0.1:9090
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+      - --storage.tsdb.retention.size=4GB
+    volumes:
+      - "./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro"
+      - "./monitoring/rules.yml:/etc/prometheus/rules.yml:ro"
+      - "prometheus:/prometheus"
+    mem_limit: 768m
+
+  loki:
+    <<: *watcher
+    image: grafana/loki:3.3.2
+    cap_drop: [ALL]
+    command: ["-config.file=/etc/loki/loki.yml"]
+    volumes:
+      - "./monitoring/loki.yml:/etc/loki/loki.yml:ro"
+      - "loki:/loki"
+    mem_limit: 512m
+
+  alloy:
+    <<: *watcher
+    image: grafana/alloy:v1.5.1
+    # Root without capabilities: the Docker socket (root's) for the
+    # containers' logs, the journal (root's group) for the host's.
+    cap_drop: [ALL]
+    command:
+      - run
+      - --server.http.listen-addr=127.0.0.1:12345
+      - --storage.path=/alloy-data
+      - --disable-reporting
+      - /etc/alloy/config.alloy
+    volumes:
+      - "./monitoring/config.alloy:/etc/alloy/config.alloy:ro"
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "/var/log/journal:/var/log/journal:ro"
+      - "/run/log/journal:/run/log/journal:ro"
+      - "/etc/machine-id:/etc/machine-id:ro"
+      - "alloy:/alloy-data"
+    mem_limit: 256m
+    depends_on: [loki]
+
+  grafana:
+    <<: *watcher
+    image: grafana/grafana:11.4.0
+    cap_drop: [ALL]
+    environment:
+      GF_SERVER_HTTP_ADDR: 127.0.0.1
+      GF_SERVER_HTTP_PORT: "3000"
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_LOG_MODE: console
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/sfvr-rooms-service.json
+    secrets: [grafana_admin]
+    volumes:
+      - "./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro"
+      - "./monitoring/dashboards:/var/lib/grafana/dashboards:ro"
+      - "grafana:/var/lib/grafana"
+    mem_limit: 256m
+    depends_on: [prometheus, loki]
+
+  publisher:
+    <<: *watcher
+    build: {context: ./publisher}
+    image: sfvr-rooms/publisher:latest
+    cap_drop: [ALL]
+    user: "65534:10001"
+    # ROOMS_API_URL and the push secret (monitoring.env.example).
+    env_file: [monitoring.env]
+    environment:
+      STATUS_FILE: /keeper/status.json
+      PUSH_SECRET_FILE: /run/secrets/rooms_push
+    secrets: [rooms_push]
+    volumes:
+      - "keeper:/keeper:ro"
+    mem_limit: 64m
+    depends_on: [keeper]
+
+secrets:
+  # Made once (docs/rooms-vps-docker.md, "Monitoring"):
+  #   openssl rand -base64 24 > secrets/grafana_admin
+  #   openssl rand -hex 32 > secrets/rooms_push   (the same value goes into the Worker)
+  grafana_admin: {file: ./secrets/grafana_admin}
+  rooms_push: {file: ./secrets/rooms_push}
+
+volumes:
+  prometheus: {}
+  loki: {}
+  alloy: {}
+  grafana: {}

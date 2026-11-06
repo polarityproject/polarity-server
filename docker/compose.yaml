@@ -58,6 +58,13 @@ services:
       - 127.0.0.1:${SFVR_PORT:-5555}
       - --ports
       - ${KEEPER_PORTS:-47200-47299}
+      # Every 5 s (compose.monitoring.yaml reads them): its metrics for
+      # node_exporter's textfile collector, and the public room list for the
+      # rooms publisher.
+      - --metrics
+      - /data/keeper.prom
+      - --status
+      - /data/status.json
     secrets: [keeper_key]
     volumes:
       - "keeper:/data"

@@ -12,6 +12,12 @@ VPS until rooms ship to everyone. It runs three containers from
 
 Reports stay on the main VPS; nothing here receives them.
 
+Optional, beside them: the monitoring (`docker/compose.monitoring.yaml`,
+[Monitoring](#monitoring)): dashboards, logs and alerts for the VPS and the
+rooms service, all on the VPS and reachable only through SSH; and the
+publisher that sends the public room list to the [rooms API](#rooms-api) on
+Cloudflare, which sites and bots read.
+
 Each container runs as an unprivileged user (uid 10001) with a read-only
 filesystem, no Linux capabilities and no privilege escalation. What they
 keep lives in two Docker volumes: `ice` (the TURN credentials file) and
@@ -25,8 +31,11 @@ address. The firewall below is therefore what protects the ports.
 
 ## 1. The VPS
 
-- Ubuntu 24.04 LTS, x86-64. 1 vCPU and 1–2 GB of RAM are plenty (the keeper
-  used 1.9 s of CPU and 11 MB for 22 players at 10 tables).
+- Ubuntu 24.04 LTS, x86-64. 1 vCPU and 1–2 GB of RAM are plenty for the three
+  containers (the keeper used 1.9 s of CPU and 11 MB for 22 players at 10
+  tables). With the monitoring, plan 2 vCPU and 4 GB: it uses about 300 MB idle
+  and its containers are capped at 1.9 GB together, and its disk grows to about
+  5 GB (30 days of metrics, 14 of logs).
 - Note its public IPv4 address. Below it is `203.0.113.10`; use yours.
 - If the provider has its own firewall in front of the VPS, open the same
   ports there as in step 3.
@@ -214,6 +223,150 @@ Before that build, a rooms build can test the server with its ini: `server`
 set to `203.0.113.10:5555` in the panel, and `[rooms] keeper_key=<public
 key>` in `sfv_rollback.ini`.
 
+## Monitoring
+
+Seven more containers from `docker/compose.monitoring.yaml`, every one on
+127.0.0.1 only (nothing new is reachable from outside, no firewall change):
+
+| Container | What it does |
+| --- | --- |
+| `node-exporter` | The VPS's CPU, memory, disk and network, and the keeper's metrics file (`sfvr_keeper_*`, written every 5 s) |
+| `container-stats` | CPU, memory, state and restarts per container, from the Docker API (read-only socket) |
+| `prometheus` | Keeps the metrics 30 days (at most 4 GB); evaluates the alert rules in `monitoring/rules.yml` |
+| `loki` | Keeps the logs 14 days |
+| `alloy` | Sends every container's log and the host's journal (sshd, ufw, Docker, the kernel) to Loki |
+| `grafana` | The dashboards: rooms service, VPS, logs |
+| `publisher` | Sends the public room list to the rooms API every 10 s (idle until it has an address) |
+
+The keeper writes `keeper.prom` and `status.json` into its volume; the
+exporter and the publisher read them in the keeper's group, read-only.
+
+### Set it up
+
+In `/opt/sfvr-rooms/docker`, once:
+
+```bash
+sudo sh -c 'openssl rand -base64 24 > secrets/grafana_admin'
+sudo sh -c 'openssl rand -hex 32 > secrets/rooms_push'
+sudo chmod 0444 secrets/grafana_admin secrets/rooms_push
+sudo cp monitoring.env.example monitoring.env
+sudo docker compose -f compose.yaml -f compose.monitoring.yaml up -d --build
+sudo docker compose -f compose.yaml -f compose.monitoring.yaml ps
+```
+
+The two secrets are readable by the containers' users (Grafana and the
+publisher do not run as root); `secrets/` itself stays root's. Leave
+`ROOMS_API_URL` empty in `monitoring.env` until the [rooms API](#rooms-api) is
+deployed.
+
+From then on, use both files in every compose command (the `Updating` and
+`Day to day` commands too), or the monitoring containers are left out:
+
+```bash
+alias dc='sudo docker compose -f compose.yaml -f compose.monitoring.yaml'
+```
+
+(in `~/.bashrc` to keep it).
+
+### Open the dashboards
+
+Grafana listens on the VPS's 127.0.0.1:3000. From your PC, through SSH:
+
+```powershell
+ssh -L 3000:127.0.0.1:3000 polarityadmin@203.0.113.10
+```
+
+Leave that session open and browse to http://localhost:3000. User `admin`,
+the password `sudo cat secrets/grafana_admin` prints. The SFVR folder has:
+
+- **SFVR rooms service** (the home page): the keeper's loop (how long one step
+  takes, how busy it is, how much of it is log writing), members, rooms,
+  tables by phase, sets, calls and tickets, relays and viewers, the publisher.
+- **SFVR rooms VPS**: CPU (steal is a busy neighbour on the VPS host), load,
+  memory, disk, network, UDP drops, each container's CPU and memory.
+- **SFVR rooms logs**: log lines per minute, the keeper, the server, ice and
+  the publisher, errors from every container, SSH logins, firewall blocks,
+  the rest of the host's journal. The `Contains` box filters every panel.
+
+The dashboards are provisioned read-only from `monitoring/dashboards/`; to
+change one, edit `monitoring/make-dashboards.py`, run it, and copy the files
+over as in step 5.
+
+### Alerts
+
+`monitoring/rules.yml`: the keeper not writing its metrics, the lobby
+down, slow or busy steps, log writing that blocks the loop, resends; CPU,
+memory and disk; a stack container down or restarting; the publisher failing.
+They show in Grafana (Alerting, Alert rules, under the Prometheus data
+source) and in Prometheus. Nothing is sent anywhere yet: a Grafana contact
+point (a Discord webhook, email) can be added when wanted.
+
+### The keeper's numbers that matter
+
+- **Step time**: the keeper is one loop over every room. A request waits for
+  the step it arrives in, so a long step is a slow answer for everyone. On
+  2026-11-06 the VPS answered a new room after 57 s and a play-on request after
+  10 s under bot load; the step time and the log-writing share say whether
+  that is CPU, log writing or something else.
+- **Resends**: answers players did not acknowledge within 250 ms.
+- **UDP buffer full** (VPS dashboard): link packets dropped because the keeper
+  did not read them in time.
+
+## Rooms API
+
+The public room list for sites, Discord bots and stream overlays, served by
+a Cloudflare Worker (`cloudflare/rooms-api`). The VPS pushes the list to it
+(the `publisher`), so readers never reach the VPS and need no address of it.
+
+```
+GET https://sfvr-rooms-api.<your account>.workers.dev/v1/rooms
+{"version":1,"updated":1793992354396,"age":4,"stale":false,
+ "rooms":[{"code":"4SLJEV","preset":"Casual sets","owner":"Owner","members":3,
+           "capacity":16,"tables":2,"open_seats":2,"rules":"r1 ft2 bo3 t99 ws3",
+           "faces":["RYU","KEN"]}]}
+
+GET .../v1/summary
+{"version":1,"updated":...,"age":4,"stale":false,
+ "totals":{"lobby":7,"rooms":3,"public_rooms":1,"players":9,"tables":4,"tables_playing":2}}
+```
+
+- Only public rooms are listed (as the game lists them, without the game's
+  limit of what fits its lobby data); private rooms count in the totals only.
+  Names are as the room shows them (the name filter's `Player N`).
+- `stale` is true when the list is over 60 s old: the VPS, the keeper or the
+  publisher is down; a page should say so rather than show it as live.
+- Any site may read it (CORS `*`); answers are cached 10 s at Cloudflare.
+- Storage is one R2 object. The free tier covers it: about 1,500–8,600
+  writes a day (a push when the list changes, at least every 60 s), reads
+  mostly from the cache. KV's free tier (1,000 writes a day) would not.
+
+### Deploy it
+
+On your PC, with Node and a Cloudflare login (`npx wrangler login`), from
+`sfvr-server/cloudflare/rooms-api`:
+
+```powershell
+node test.mjs
+npx wrangler r2 bucket create sfvr-rooms
+npx wrangler secret put PUSH_SECRET
+npx wrangler deploy
+```
+
+`secret put` asks for the value: paste what `sudo cat secrets/rooms_push`
+prints on the VPS. `deploy` prints the Worker's address. On the VPS, put it in
+`monitoring.env`:
+
+```
+ROOMS_API_URL=https://sfvr-rooms-api.<your account>.workers.dev
+```
+
+then `dc up -d publisher` (with the alias above) and, after 10 s,
+`dc logs publisher` and the address's `/v1/summary` in a browser. A custom
+domain (`rooms.example.com`) can be added in the Worker's settings later
+without changing anything else.
+
+To change the secret: a new `secrets/rooms_push`, `npx wrangler secret put
+PUSH_SECRET` with it, `dc up -d --force-recreate publisher`.
 ## Updating
 
 | What | How | Effect on players |
@@ -236,7 +389,8 @@ sudo docker compose restart keeper        # restart one container
 sudo docker compose down                  # stop everything (volumes stay)
 ```
 
-Logs rotate on their own (10 MB, 5 files per container).
+Logs rotate on their own (10 MB, 5 files per container). With the monitoring,
+the dashboards show the same logs for 14 days ([Monitoring](#monitoring)).
 
 ## When something is wrong
 
@@ -248,8 +402,34 @@ Logs rotate on their own (10 MB, 5 files per container).
 - **Matches fail for some players only**: no TURN (`docker compose logs ice`;
   `cloudflare.env`).
 - **The keeper's links fail**: UDP 47200–47299 closed somewhere.
+- **Rooms take long to make, play on falls back to the room, calls lag**: the
+  keeper's loop waits. Its dashboard says on what: a long **connect** was the
+  connection limit catching the keeper's own connections on the loopback
+  (fixed in `connection-limit.sh` on 2026-11-06; `sudo sh connection-limit.sh`
+  again replaces an older rule); long steps without that are CPU (the VPS
+  dashboard's steal and the keeper's CPU) or log writing.
 
 ## Tested
+
+2026-11-06, the monitoring on a Windows PC with Docker Desktop
+(`compose.local.monitoring.yaml`):
+
+- Every container up, Prometheus scraping all seven targets, the 12 alert
+  rules loaded, the three dashboards provisioned; the publisher pushing to the
+  Worker's code run in Node (`cloudflare/rooms-api/test.mjs` also passes); a
+  host-network container's log in Loki with its `service` label. The
+  monitoring used about 260 MB idle.
+- Found: cAdvisor (0.49.1 to 0.53.0) cannot place containers when Docker
+  keeps images in containerd (Docker 29's default): `container-stats` reads
+  the Docker API instead.
+- 112 bots, sets every 2.5 s: the keeper's longest step 2.2 ms, its loop 4 %
+  busy, log writing under 0.1 %, 16 MB, 1,064 tickets, no resends.
+- **The VPS slowdown, reproduced and fixed**: the connection limit's rule on
+  the loopback too (as `connection-limit.sh` put it, above ufw's loopback
+  accept), 48 bots: a new room 17–36 s, a keeper step up to 24.6 s, 122 s of
+  its loop waiting on connects (one per room and per set's relay room, about
+  110 a minute here). Without it: 0.4–0.5 s, 1.5 ms, 0.03 s, four times the
+  tickets.
 
 2026-11-04, on a Windows PC with Docker Desktop:
 

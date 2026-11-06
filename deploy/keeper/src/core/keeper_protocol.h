@@ -123,6 +123,22 @@ std::vector<std::string> PackRoomList(const std::vector<ListedRoom>& rooms);
 // From a lobby's room data; entries that do not parse are skipped.
 std::vector<ListedRoom> UnpackRoomList(const std::map<std::string, std::string>& data);
 
+// The rooms API's document (the keeper's --status file, which sfvr-server's
+// rooms publisher sends on): the public list as the lobby shows it, and
+// totals over every room (private ones as counts only).
+struct RoomTotals {
+    int lobbyMembers = 0;  // in the lobby channel (the hub's), the keeper not counted
+    int rooms = 0;         // custom rooms, public and private
+    int publicRooms = 0;   // listed
+    int players = 0;       // members of custom rooms
+    int tables = 0;
+    int tablesPlaying = 0; // a set connecting or under way
+};
+// {"version":1,"updated":<unix ms>,"totals":{...},"rooms":[{"code":..,
+// "preset":"Casual sets","owner":..,"members":..,"capacity":16,"tables":..,
+// "open_seats":..,"rules":..,"faces":[..]}]}; strings escaped for JSON.
+std::string FormatRoomListJson(const std::vector<ListedRoom>& rooms, const RoomTotals& totals, int64_t unixMs);
+
 // --- chat ---
 // Room chat limits (user, 2026-11-02): 200 characters, one message a second
 // with a burst of 3. The keeper kicks a member who keeps going past them; the

@@ -1,0 +1,28 @@
+# Prometheus on the rooms VPS (compose.monitoring.yaml): every exporter
+# listens on 127.0.0.1 (host networking).
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/rules.yml
+
+scrape_configs:
+  # The VPS, and the keeper's metrics file through the textfile collector
+  # (sfvr_keeper_*; node_textfile_mtime_seconds says when it was written).
+  - job_name: node
+    static_configs: [{targets: ["127.0.0.1:9100"]}]
+  # CPU, memory and restarts per container (container-stats).
+  - job_name: containers
+    static_configs: [{targets: ["127.0.0.1:9466"]}]
+  - job_name: prometheus
+    static_configs: [{targets: ["127.0.0.1:9090"]}]
+  - job_name: loki
+    static_configs: [{targets: ["127.0.0.1:3100"]}]
+  - job_name: alloy
+    static_configs: [{targets: ["127.0.0.1:12345"]}]
+  - job_name: grafana
+    static_configs: [{targets: ["127.0.0.1:3000"]}]
+  # The rooms publisher's own counters (pushes, failures).
+  - job_name: publisher
+    static_configs: [{targets: ["127.0.0.1:9465"]}]

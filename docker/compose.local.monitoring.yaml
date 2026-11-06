@@ -1,0 +1,33 @@
+# Testing the monitoring on a PC with Docker Desktop (no host networking, no
+# journal): every service in the server's network namespace, so 127.0.0.1
+# still reaches the others; Grafana on this PC's localhost:3000.
+#   docker compose -f compose.yaml -f compose.local.yaml -f compose.monitoring.yaml -f compose.local.monitoring.yaml up -d --build
+services:
+  server:
+    ports:
+      - "127.0.0.1:3000:3000/tcp"
+  node-exporter:
+    network_mode: "service:server"
+    # Docker Desktop's root is not a shared mount (rslave fails).
+    volumes: !override
+      - "/:/host:ro"
+      - "keeper:/keeper:ro"
+  container-stats:
+    network_mode: "service:server"
+  prometheus:
+    network_mode: "service:server"
+  loki:
+    network_mode: "service:server"
+  alloy:
+    network_mode: "service:server"
+    volumes: !override
+      - "./monitoring/config.alloy:/etc/alloy/config.alloy:ro"
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "alloy:/alloy-data"
+  grafana:
+    network_mode: "service:server"
+    environment:
+      # The published port reaches the namespace's own address, not its loopback.
+      GF_SERVER_HTTP_ADDR: 0.0.0.0
+  publisher:
+    network_mode: "service:server"

@@ -1,0 +1,10 @@
+apiVersion: 1
+providers:
+  # monitoring/dashboards/*.json (make-dashboards.py writes them).
+  - name: sfvr
+    folder: SFVR
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards

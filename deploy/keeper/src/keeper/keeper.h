@@ -63,6 +63,15 @@ public:
     std::string LobbyCode() const;
     size_t CustomRooms() const;
 
+    // Observability (main.cpp writes both files every few seconds, --metrics
+    // and --status). The keeper's counters and gauges in the Prometheus text
+    // format (node_exporter's textfile collector reads it); the longest step
+    // since the last call starts over.
+    std::string MetricsText();
+    // The public room list (as the lobby lists it) and the totals, as JSON
+    // for the rooms API (FormatRoomListJson).
+    std::string StatusJson(int64_t unixMs) const;
+
 private:
     struct Member {
         uint32_t id = 0;
@@ -82,6 +91,7 @@ private:
         std::string datagram;
         int64_t nextMs = 0;
         int64_t untilMs = 0;
+        int sends = 0;
     };
     enum class Kind { Lobby, Custom };
     // A table set's spectator relay (core/spectate_relay.h): the host of a
@@ -199,6 +209,23 @@ private:
     // until acknowledged.
     void Notice(Room& room, uint32_t to, const std::string& kind, bool ok, const std::string& text, int64_t nowMs);
     std::mt19937_64 rng_{std::random_device{}()};
+    // The rooms the lobby lists (public, set up, someone in them, not unlisted).
+    std::vector<ListedRoom> PublicList() const;
+    // Counters since the start, for MetricsText.
+    struct Stats {
+        static constexpr int kBuckets = 10;
+        static constexpr double kBucketSeconds[kBuckets] = {0.001, 0.002, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0};
+        uint64_t steps = 0;
+        double stepSeconds = 0;
+        uint64_t stepBuckets[kBuckets] = {}; // steps at or under each limit (not cumulative)
+        double stepMaxSeconds = 0;           // since the last MetricsText
+        std::map<std::string, uint64_t> requests; // by kind (known kinds; the rest "other")
+        uint64_t answers = 0, resends = 0, notices = 0, tickets = 0, calls = 0, callsLapsed = 0;
+        std::map<std::string, uint64_t> sets; // how sets ended: result, forfeit, again, unfinished
+        uint64_t roomsAsked = 0, roomsClosed = 0, floodKicks = 0, ownerKicks = 0, serverLost = 0, relays = 0;
+        uint64_t connects = 0, connectFailures = 0;
+        double connectSeconds = 0, connectMaxSeconds = 0; // the max since the last MetricsText
+    } stats_;
     void SaveState();
     std::vector<std::string> LoadState();
     int Count(const Room& room) const { return static_cast<int>(room.members.size()); }
