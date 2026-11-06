@@ -3,3 +3,5 @@
 # The rooms stack (docker/): its signing key and name filter words stay on the VPS.
 docker/secrets/
 docker/keeper-words.txt
+# Wrangler's local state (cloudflare/rooms-api).
+.wrangler/

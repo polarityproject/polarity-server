@@ -20,7 +20,9 @@ import urllib.error
 import urllib.request
 
 EVERY = float(os.environ.get("PUBLISH_EVERY", "10"))
-HEARTBEAT = float(os.environ.get("PUBLISH_HEARTBEAT", "60"))
+# Well under the rooms API's 60 s stale mark (a heartbeat late by one look,
+# plus the 10 s cache, must still land before it).
+HEARTBEAT = float(os.environ.get("PUBLISH_HEARTBEAT", "30"))
 MAX_BYTES = 512 * 1024
 
 stats = {"pushes": 0, "failures": 0, "skipped": 0, "last_success": 0.0, "last_bytes": 0, "rooms": 0}
