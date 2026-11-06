@@ -84,6 +84,7 @@ private:
         int callStrikes = 0; // your-turn calls let lapse in a row (twice: off the queue)
         bool removed = false; // kicked: what they sent before going is not acted on
         std::string chara;         // member data `ch`, for the list's faces
+        std::string country;       // member data `@cc`, set by the rooms server from the address: for the rooms API
     };
     struct Outgoing {
         uint32_t to = 0;

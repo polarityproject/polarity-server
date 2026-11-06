@@ -111,6 +111,15 @@ struct ListedRoom {
     int openSeats = 0;       // seats nobody sits in, over all tables
     std::string rules;       // the first table's (FormatRules)
     std::vector<std::string> faces; // up to six character codes of members
+    // Every member, in join order, for the rooms API only (FormatRoomListJson;
+    // the lobby's keys have no room for them).
+    struct Player {
+        std::string name;    // as the room shows it (the name filter's "Player N")
+        std::string country; // ISO 3166 alpha-2, the rooms server's lookup (member data `@cc`); "" unknown
+        std::string face;    // the character code (member data `ch`); "" none
+        bool operator==(const Player&) const = default;
+    };
+    std::vector<Player> players;
     bool operator==(const ListedRoom&) const = default;
 };
 // Rooms with open seats first, then full tables with room to queue, then
@@ -124,19 +133,19 @@ std::vector<std::string> PackRoomList(const std::vector<ListedRoom>& rooms);
 std::vector<ListedRoom> UnpackRoomList(const std::map<std::string, std::string>& data);
 
 // The rooms API's document (the keeper's --status file, which sfvr-server's
-// rooms publisher sends on): the public list as the lobby shows it, and
-// totals over every room (private ones as counts only).
+// rooms publisher sends on): the public list as the lobby shows it, and three
+// public totals (user, 2026-11-06): players online, how many of them are in
+// public rooms, and the public rooms. Nothing else about private rooms.
 struct RoomTotals {
-    int lobbyMembers = 0;  // in the lobby channel (the hub's), the keeper not counted
-    int rooms = 0;         // custom rooms, public and private
+    int online = 0;        // every hub on the server: the lobby channel's members and every custom room's
+    int inPublicRooms = 0; // members of the listed rooms
     int publicRooms = 0;   // listed
-    int players = 0;       // members of custom rooms
-    int tables = 0;
-    int tablesPlaying = 0; // a set connecting or under way
 };
-// {"version":1,"updated":<unix ms>,"totals":{...},"rooms":[{"code":..,
+// {"version":1,"updated":<unix ms>,"totals":{"online":..,"in_public_rooms":..,
+// "public_rooms":..},"rooms":[{"code":..,
 // "preset":"Casual sets","owner":..,"members":..,"capacity":16,"tables":..,
-// "open_seats":..,"rules":..,"faces":[..]}]}; strings escaped for JSON.
+// "open_seats":..,"rules":..,"faces":[..],"players":[{"name":..,"country":"DE"|null,
+// "face":"RYU"|null}]}]}; strings escaped for JSON.
 std::string FormatRoomListJson(const std::vector<ListedRoom>& rooms, const RoomTotals& totals, int64_t unixMs);
 
 // --- chat ---

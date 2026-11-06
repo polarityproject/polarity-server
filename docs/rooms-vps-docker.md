@@ -8,6 +8,7 @@ VPS until rooms ship to everyone. It runs three containers from
 | --- | --- | --- |
 | `server` | The rooms server (Weyvelength), the same commit as today's public server | TCP 5555 (and 443, redirected) |
 | `ice` | Fresh Cloudflare TURN credentials for it every 6 hours | outbound HTTPS only |
+| `geoip` | DB-IP's free IP-to-country database for it, every month: players' countries for the rooms API | outbound HTTPS only |
 | `keeper` | sfvr-keeper: custom rooms' tables, calls, rotation and moderation; a client of the server | UDP 47200–47299 (its peer-to-peer links) |
 
 Reports stay on the main VPS; nothing here receives them.
@@ -321,18 +322,34 @@ a Cloudflare Worker (`cloudflare/rooms-api`). The VPS pushes the list to it
 ```
 GET https://sfvr-rooms-api.<your account>.workers.dev/v1/rooms
 {"version":1,"updated":1793992354396,"age":4,"stale":false,
+ "attribution":"IP Geolocation by DB-IP (https://db-ip.com), CC BY 4.0",
  "rooms":[{"code":"4SLJEV","preset":"Casual sets","owner":"Owner","members":3,
            "capacity":16,"tables":2,"open_seats":2,"rules":"r1 ft2 bo3 t99 ws3",
-           "faces":["RYU","KEN"]}]}
+           "faces":["RYU","KEN"],
+           "players":[{"name":"Owner","country":"DE","face":"RYU"},
+                      {"name":"PolarityDev","country":"FR","face":"KEN"},
+                      {"name":"Player 3","country":null,"face":null}]}]}
 
 GET .../v1/summary
 {"version":1,"updated":...,"age":4,"stale":false,
- "totals":{"lobby":7,"rooms":3,"public_rooms":1,"players":9,"tables":4,"tables_playing":2}}
+ "totals":{"online":12,"in_public_rooms":3,"public_rooms":1}}
 ```
 
 - Only public rooms are listed (as the game lists them, without the game's
-  limit of what fits its lobby data); private rooms count in the totals only.
-  Names are as the room shows them (the name filter's `Player N`).
+  limit of what fits its lobby data). Names are as the room shows them (the
+  name filter's `Player N`).
+- `players`: every member in join order, with their country and character.
+  The country is the rooms server's own lookup of the player's address in
+  DB-IP's free database (`geoip`), never anything the game claims: the
+  server gives each member the member data `@cc` and refuses `@` keys from
+  clients. A VPN shows its exit's country; `null` when unknown. Players are
+  not asked; the notice about it is on the SFVR site.
+- **Attribution**: DB-IP's licence (CC BY 4.0) asks whoever shows the countries
+  to credit them: the `attribution` line, or `IP Geolocation by DB-IP` with a
+  link to https://db-ip.com, beside the flags on a page or in an embed.
+- The totals: `online`, every player connected (in the lobby or any room,
+  private ones too); `in_public_rooms`, the members of the listed rooms;
+  `public_rooms`, the listed rooms. Nothing else about private rooms.
 - `stale` is true when the list is over 60 s old: the VPS, the keeper or the
   publisher is down; a page should say so rather than show it as live.
 - Any site may read it (CORS `*`); answers are cached 10 s at Cloudflare.
@@ -375,6 +392,7 @@ PUSH_SECRET` with it, `dc up -d --force-recreate publisher`.
 | A new keeper | `keeper-bundle.ps1`, copy `deploy/keeper/` over (step 5), then `sudo docker compose up -d --build keeper` | rooms stay; their tables pause a few seconds and carry on |
 | Security fixes in the images | `sudo docker compose build --pull && sudo docker compose up -d` (monthly, or after an Ubuntu advisory) | the server restarts: rooms and matches end |
 | Cloudflare key | edit `cloudflare.env`, then `sudo docker compose up -d ice` | none |
+| The country database | nothing: `geoip` fetches each month's on its own (`dc logs geoip`), and the server reopens it | none |
 | Weyvelength commit | change it in `docker/server.Dockerfile`, `deploy/install.sh`, the mod's `CMakeLists.txt` and `src/keeper/CMakeLists.txt` together | needs a mod release |
 
 Old images pile up after rebuilds: `sudo docker image prune -f`.
@@ -402,6 +420,8 @@ the dashboards show the same logs for 14 days ([Monitoring](#monitoring)).
 - **Matches fail for some players only**: no TURN (`docker compose logs ice`;
   `cloudflare.env`).
 - **The keeper's links fail**: UDP 47200–47299 closed somewhere.
+- **No countries on the rooms API**: `dc logs geoip` (the download) and
+  `dc logs server | grep GeoIp` (it says when it opened the database).
 - **Rooms take long to make, play on falls back to the room, calls lag**: the
   keeper's loop waits. Its dashboard says on what: a long **connect** was the
   connection limit catching the keeper's own connections on the loopback
@@ -410,6 +430,14 @@ the dashboards show the same logs for 14 days ([Monitoring](#monitoring)).
   dashboard's steal and the keeper's CPU) or log writing.
 
 ## Tested
+
+2026-11-06, players' countries (`weyvelength-geoip.patch`, `geoip`) in Docker on a
+Windows PC: the server built with libmaxminddb and the patch, `geoip` fetched
+November's DB-IP file (8.5 MB) and the server opened it; three bots in a public
+room were listed with the test country (`GEOIP_PRIVATE`, their addresses being
+private there); a bot setting `@cc` itself was refused (room error 4) and kept
+the server's; the file gives 8.8.8.8 US, a German host DE, a Japanese JP. Real
+addresses are first looked up on the VPS.
 
 2026-11-06, the monitoring on a Windows PC with Docker Desktop
 (`compose.local.monitoring.yaml`):

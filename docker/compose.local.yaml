@@ -10,5 +10,7 @@ services:
       - "47200-47299:47200-47299/udp"
   ice:
     network_mode: "service:server"
+  geoip:
+    network_mode: "service:server"
   keeper:
     network_mode: "service:server"

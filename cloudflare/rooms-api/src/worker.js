@@ -4,12 +4,14 @@
 //
 //   POST /v1/push     the publisher only (Authorization: Bearer <PUSH_SECRET>):
 //                     the keeper's status document, stored in R2
-//   GET  /v1/rooms    {version, updated, age, stale, rooms: [...]}
-//   GET  /v1/summary  {version, updated, age, stale, totals: {...}}
+//   GET  /v1/rooms    {version, updated, age, stale, attribution, rooms: [...]}
+//   GET  /v1/summary  {version, updated, age, stale, totals: {online, in_public_rooms, public_rooms}}
 //   GET  /v1/health   "ok"
 //
 // A room: {code, preset, owner, members, capacity, tables, open_seats,
-// rules, faces}. `stale`: the list is older than 60 s (the VPS, the keeper
+// rules, faces, players: [{name, country, face}]}. country is the rooms
+// server's lookup of the player's address in DB-IP's free database (null
+// when unknown); whoever shows it credits DB-IP (ttribution, CC BY 4.0). `stale`: the list is older than 60 s (the VPS, the keeper
 // or the publisher is down); readers should say so rather than show it as
 // live. Any site may read it (CORS *); answers are cached 10 s.
 
@@ -17,6 +19,8 @@ const OBJECT = "status.json";
 const MAX_BYTES = 512 * 1024;
 const STALE_MS = 60_000;
 const CACHE_SECONDS = 10;
+// DB-IP's licence (CC BY 4.0) for the players' countries: shown with them.
+const ATTRIBUTION = "IP Geolocation by DB-IP (https://db-ip.com), CC BY 4.0";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -86,7 +90,7 @@ async function handleRead(path, env, now) {
   if (!doc) return json({ error: "no room list yet" }, 503, { "Cache-Control": "no-store" });
   const age = Math.max(0, now - doc.updated);
   const head = { version: 1, updated: doc.updated, age: Math.round(age / 1000), stale: age > STALE_MS };
-  const body = path === "/v1/rooms" ? { ...head, rooms: doc.rooms } : { ...head, totals: doc.totals };
+  const body = path === "/v1/rooms" ? { ...head, attribution: ATTRIBUTION, rooms: doc.rooms } : { ...head, totals: doc.totals };
   return json(body, 200, { "Cache-Control": `public, max-age=${CACHE_SECONDS}` });
 }
 

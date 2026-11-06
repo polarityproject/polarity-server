@@ -6,6 +6,7 @@
 #include <weyvelength.h>
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cstdarg>
 #include <cstdio>
@@ -496,6 +497,15 @@ void Keeper::OnMemberData(Room& room, uint32_t id, const std::string& key, const
     if (key == "ch") {
         m.chara = value.substr(0, 3);
     }
+    else if (key == "@cc") {
+        // The rooms server's own: the member's country from their address
+        // (sfvr-server docker/weyvelength-geoip.patch; clients cannot set '@'
+        // keys). Two letters (ISO 3166 alpha-2) or nothing: it goes out on the
+        // rooms API.
+        const bool ok = value.size() == 2 && std::isupper(static_cast<unsigned char>(value[0])) &&
+                        std::isupper(static_cast<unsigned char>(value[1]));
+        m.country = ok ? value : std::string();
+    }
     else if (key == kAck) {
         const uint32_t seq = static_cast<uint32_t>(std::strtoul(value.c_str(), nullptr, 10));
         std::erase_if(room.outbox, [&](const Outgoing& o) { return o.to == id && o.seq <= seq; });
@@ -682,7 +692,9 @@ std::vector<ListedRoom> Keeper::PublicList() const
         l.rules = rules ? Str(rules, len) : FormatRules(Rules{});
         for (uint32_t id : r->order) {
             const auto m = r->members.find(id);
-            if (m != r->members.end() && !m->second.chara.empty() && l.faces.size() < 6) l.faces.push_back(m->second.chara);
+            if (m == r->members.end()) continue;
+            if (!m->second.chara.empty() && l.faces.size() < 6) l.faces.push_back(m->second.chara);
+            l.players.push_back({ShownName(*r, id), m->second.country, m->second.chara});
         }
         list.push_back(std::move(l));
     }
@@ -692,19 +704,16 @@ std::vector<ListedRoom> Keeper::PublicList() const
 
 std::string Keeper::StatusJson(int64_t unixMs) const
 {
+    // A hub is in one room at a time (the lobby channel or a custom room), so
+    // the members add up to the players online without counting anyone twice.
     RoomTotals totals;
-    if (lobby_ && lobby_->inRoom) totals.lobbyMembers = Count(*lobby_);
+    if (lobby_ && lobby_->inRoom) totals.online = Count(*lobby_);
     for (const auto& r : rooms_) {
-        if (r->closing || !r->inRoom) continue;
-        totals.rooms++;
-        totals.players += Count(*r);
-        for (const Table& t : r->tables) {
-            totals.tables++;
-            if (t.s.phase == TablePhase::Connecting || t.s.phase == TablePhase::Playing) totals.tablesPlaying++;
-        }
+        if (!r->closing && r->inRoom) totals.online += Count(*r);
     }
     const std::vector<ListedRoom> list = PublicList();
     totals.publicRooms = static_cast<int>(list.size());
+    for (const ListedRoom& l : list) totals.inPublicRooms += l.members;
     return FormatRoomListJson(list, totals, unixMs);
 }
 

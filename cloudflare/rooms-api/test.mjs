@@ -19,8 +19,9 @@ const push = (body, secret = "s3cret") =>
 const doc = {
   version: 1,
   updated: Date.now() - 5000,
-  totals: { lobby: 3, rooms: 2, public_rooms: 1, players: 5, tables: 3, tables_playing: 1 },
-  rooms: [{ code: "ABC123", preset: "Casual sets", owner: "Laptop", members: 2, capacity: 16, tables: 2, open_seats: 1, rules: "r1 ft2 bo3 t99 ws3", faces: ["RYU"] }],
+  totals: { online: 12, in_public_rooms: 2, public_rooms: 1 },
+  rooms: [{ code: "ABC123", preset: "Casual sets", owner: "Laptop", members: 2, capacity: 16, tables: 2, open_seats: 1, rules: "r1 ft2 bo3 t99 ws3", faces: ["RYU"],
+    players: [{ name: "Laptop", country: "DE", face: "RYU" }, { name: "PolarityDev", country: null, face: null }] }],
 };
 
 let r = await call("/v1/rooms");
@@ -39,11 +40,13 @@ assert.match(r.headers.get("Cache-Control"), /max-age=10/);
 let body = await r.json();
 assert.equal(body.stale, false);
 assert.equal(body.rooms[0].code, "ABC123");
+assert.equal(body.rooms[0].players[0].country, "DE");
+assert.match(body.attribution, /DB-IP/);
 assert.equal(body.totals, undefined);
 assert.ok(body.age >= 4 && body.age <= 7);
 
 body = await (await call("/v1/summary/")).json();
-assert.equal(body.totals.players, 5);
+assert.equal(body.totals.online, 12);
 assert.equal(body.rooms, undefined);
 
 await push({ ...doc, updated: Date.now() - 120000 });

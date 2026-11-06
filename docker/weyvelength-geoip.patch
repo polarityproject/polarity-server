@@ -1,0 +1,358 @@
+diff --git a/Server/CMakeLists.txt b/Server/CMakeLists.txt
+index 5a22355..9c21884 100644
+--- a/Server/CMakeLists.txt
++++ b/Server/CMakeLists.txt
+@@ -1,6 +1,7 @@
+ add_executable(
+     Server
+     ${CMAKE_CURRENT_SOURCE_DIR}/src/weyvelength_server.cpp
++    ${CMAKE_CURRENT_SOURCE_DIR}/src/geoip.cpp
+     ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp)
+ target_include_directories(
+     Server
+@@ -8,6 +9,19 @@ target_include_directories(
+     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../Shared/thirdparty/spdlog)
+ target_link_libraries(Server PRIVATE weyvelength_shared)
+ 
++# Members' countries (--geoip): with libmaxminddb when it is there (Debian,
++# Ubuntu: libmaxminddb-dev); without it the server runs as before, no countries.
++find_path(MAXMINDDB_INCLUDE_DIR maxminddb.h)
++find_library(MAXMINDDB_LIBRARY maxminddb)
++if(MAXMINDDB_INCLUDE_DIR AND MAXMINDDB_LIBRARY)
++    target_include_directories(Server PRIVATE ${MAXMINDDB_INCLUDE_DIR})
++    target_link_libraries(Server PRIVATE ${MAXMINDDB_LIBRARY})
++    target_compile_definitions(Server PRIVATE WEYVELENGTH_GEOIP)
++    message(STATUS "Server: countries from libmaxminddb (${MAXMINDDB_LIBRARY})")
++else()
++    message(STATUS "Server: no libmaxminddb, so no countries (--geoip is ignored)")
++endif()
++
+ if(MSVC)
+     target_compile_options(Server PRIVATE /utf-8) # fmt 11 (bundled in spdlog) requires utf-8 literals
+ elseif(MINGW)
+diff --git a/Server/include/geoip.h b/Server/include/geoip.h
+new file mode 100644
+index 0000000..0ed8ee2
+--- /dev/null
++++ b/Server/include/geoip.h
+@@ -0,0 +1,44 @@
++#pragma once
++
++// The country of a client's address, from an IP-to-country database in the
++// MaxMind DB format (DB-IP's free "IP to Country Lite", or GeoLite2 Country):
++// the server's own lookup, so a client cannot claim another country. Built
++// with libmaxminddb when it is found (WEYVELENGTH_GEOIP); without it, or
++// without a file, every lookup is "".
++
++#include <chrono>
++#include <filesystem>
++#include <string>
++
++#include <asio.hpp>
++
++struct MMDB_s;
++
++namespace Weyvelength {
++
++	class GeoIp {
++	public:
++		GeoIp() = default;
++		GeoIp(const GeoIp&) = delete;
++		GeoIp& operator=(const GeoIp&) = delete;
++		~GeoIp();
++
++		// The database file, reopened when it changes (checked at most once a
++		// minute). For loopback and private addresses, `private_country` (for
++		// testing a server on a LAN; empty: none).
++		void Configure(std::string path, std::string private_country);
++
++		// "DE" (ISO 3166-1 alpha-2), or "" when unknown.
++		std::string Country(const asio::ip::address& address);
++
++	private:
++		void Reopen();
++
++		std::string _path;
++		std::string _private;
++		MMDB_s* _db = nullptr;
++		std::filesystem::file_time_type _opened{};
++		std::chrono::steady_clock::time_point _checked{};
++		bool _said_missing = false;
++	};
++}
+diff --git a/Server/include/weyvelength_server.h b/Server/include/weyvelength_server.h
+index 896d780..57b956e 100644
+--- a/Server/include/weyvelength_server.h
++++ b/Server/include/weyvelength_server.h
+@@ -16,6 +16,7 @@
+ 
+ #include <asio.hpp>
+ 
++#include "geoip.h"
+ #include "protocol.h"
+ 
+ namespace Weyvelength {
+@@ -25,12 +26,20 @@ namespace Weyvelength {
+ 		uint32_t room_code_length = 0; // 0 = use the default (8)
+ 		uint32_t room_list_cooldown_ms = 0; // 0 = use the default (1000)
+ 		Proto::IceServers ice; // stun/turn handed to every client on connect
++		std::string geoip_path; // an IP-to-country database (MaxMind DB format); empty = no countries
++		std::string geoip_private; // the country for loopback/private addresses (testing on a LAN)
+ 	};
+ 
++	// The member data key the server sets on every member it can place: their
++	// country (ISO 3166-1 alpha-2) from their address. Keys starting with '@'
++	// are the server's: clients cannot set them.
++	inline constexpr const char* server_country_key = "@cc";
++
+ 	struct Connection {
+ 		uint32_t id = 0;
+ 		std::string room; // empty = not in a room
+ 		std::string name = Proto::default_client_name; // never empty; fixed while in a room
++		std::string country; // from the address at connect (GeoIp); "" = unknown
+ 		asio::ip::tcp::socket socket;
+ 
+ 		std::deque<std::vector<std::byte>> out; // outbound queue; WriteLoop is the sole writer
+@@ -91,6 +100,7 @@ namespace Weyvelength {
+ 		void HandleListRooms(const std::shared_ptr<Connection>& conn, const Proto::ListRooms& msg);
+ 
+ 		void LeaveRoom(const std::shared_ptr<Connection>& conn);
++		void SetServerCountry(Room& room, const std::shared_ptr<Connection>& conn); // "@cc" for a member just in
+ 		const std::string& MemberName(uint32_t id) const; // the default if the connection is gone
+ 		Room* HostRoom(const std::shared_ptr<Connection>& conn); // the sender's room if they host it, else null after sending the error
+ 
+@@ -112,5 +122,6 @@ namespace Weyvelength {
+ 		uint32_t _next_slot = 1;   // slots never yet handed out; 0 reserved as "none"
+ 
+ 		ServerConfig _config;
++		GeoIp _geoip;
+ 	};
+ }
+diff --git a/Server/src/geoip.cpp b/Server/src/geoip.cpp
+new file mode 100644
+index 0000000..733ade5
+--- /dev/null
++++ b/Server/src/geoip.cpp
+@@ -0,0 +1,120 @@
++#include "geoip.h"
++
++#include <cctype>
++
++#include <spdlog/spdlog.h>
++
++#ifdef WEYVELENGTH_GEOIP
++#include <maxminddb.h>
++#endif
++
++namespace Weyvelength {
++
++	static bool IsPrivate(const asio::ip::address& address)
++	{
++		if (address.is_loopback() || address.is_unspecified())
++			return true;
++		if (address.is_v4()) {
++			const auto b = address.to_v4().to_bytes();
++			return b[0] == 10 || (b[0] == 172 && (b[1] & 0xF0) == 16) || (b[0] == 192 && b[1] == 168) ||
++				(b[0] == 169 && b[1] == 254) || (b[0] == 100 && (b[1] & 0xC0) == 64); // RFC 1918, link-local, CGNAT
++		}
++		const auto v6 = address.to_v6();
++		if (v6.is_v4_mapped())
++			return IsPrivate(asio::ip::make_address_v4(asio::ip::v4_mapped, v6));
++		const auto b = v6.to_bytes();
++		return v6.is_link_local() || (b[0] & 0xFE) == 0xFC; // fe80::/10, fc00::/7
++	}
++
++	static std::string TwoLetters(const char* text, size_t length)
++	{
++		if (length != 2 || !std::isalpha((unsigned char)text[0]) || !std::isalpha((unsigned char)text[1]))
++			return {};
++		return { (char)std::toupper((unsigned char)text[0]), (char)std::toupper((unsigned char)text[1]) };
++	}
++
++	GeoIp::~GeoIp()
++	{
++#ifdef WEYVELENGTH_GEOIP
++		if (_db) {
++			MMDB_close(_db);
++			delete _db;
++		}
++#endif
++	}
++
++	void GeoIp::Configure(std::string path, std::string private_country)
++	{
++		_path = std::move(path);
++		_private = TwoLetters(private_country.c_str(), private_country.size());
++#ifndef WEYVELENGTH_GEOIP
++		if (!_path.empty())
++			spdlog::warn("GeoIp: built without libmaxminddb; {} is not read, no countries", _path);
++#endif
++		Reopen();
++	}
++
++	void GeoIp::Reopen()
++	{
++#ifdef WEYVELENGTH_GEOIP
++		if (_path.empty())
++			return;
++		std::error_code ec;
++		const auto written = std::filesystem::last_write_time(_path, ec);
++		if (ec) {
++			if (!_db && !_said_missing)
++				spdlog::warn("GeoIp: no database at {} yet; no countries until it is there", _path);
++			_said_missing = true;
++			return;
++		}
++		if (_db && written == _opened)
++			return;
++		auto* db = new MMDB_s{};
++		const int status = MMDB_open(_path.c_str(), MMDB_MODE_MMAP, db);
++		if (status != MMDB_SUCCESS) {
++			spdlog::warn("GeoIp: cannot open {}: {}", _path, MMDB_strerror(status));
++			delete db;
++			return;
++		}
++		if (_db) {
++			MMDB_close(_db);
++			delete _db;
++		}
++		_db = db;
++		_opened = written;
++		spdlog::info("GeoIp: {} ({}, built {})", _path, db->metadata.database_type ? db->metadata.database_type : "?",
++			(long long)db->metadata.build_epoch);
++#endif
++	}
++
++	std::string GeoIp::Country(const asio::ip::address& address)
++	{
++#ifdef WEYVELENGTH_GEOIP
++		const auto now = std::chrono::steady_clock::now();
++		if (now - _checked > std::chrono::minutes(1)) {
++			_checked = now;
++			Reopen(); // a new month's file, or the first one
++		}
++#endif
++		if (IsPrivate(address))
++			return _private;
++#ifdef WEYVELENGTH_GEOIP
++		if (!_db)
++			return {};
++		const std::string text = address.is_v6() && address.to_v6().is_v4_mapped()
++			? asio::ip::make_address_v4(asio::ip::v4_mapped, address.to_v6()).to_string()
++			: address.to_string();
++		int gai_error = 0, mmdb_error = MMDB_SUCCESS;
++		MMDB_lookup_result_s result = MMDB_lookup_string(_db, text.c_str(), &gai_error, &mmdb_error);
++		if (gai_error != 0 || mmdb_error != MMDB_SUCCESS || !result.found_entry)
++			return {};
++		MMDB_entry_data_s data{};
++		if (MMDB_get_value(&result.entry, &data, "country", "iso_code", nullptr) != MMDB_SUCCESS || !data.has_data ||
++			data.type != MMDB_DATA_TYPE_UTF8_STRING)
++			return {};
++		return TwoLetters(data.utf8_string, data.data_size);
++#else
++		return {};
++#endif
++	}
++}
+diff --git a/Server/src/main.cpp b/Server/src/main.cpp
+index ae1c0d1..37a42c9 100644
+--- a/Server/src/main.cpp
++++ b/Server/src/main.cpp
+@@ -29,7 +29,11 @@ static void PrintUsage()
+ 		"  --stun-port PORT             default 19302\n"
+ 		"  --turn HOST:PORT:USER:PASS   repeatable\n"
+ 		"  --ice-file PATH              read stun/turn from a file and reread it as it expires,\n"
+-		"                               replacing --stun-host, --stun-port and --turn\n";
++		"                               replacing --stun-host, --stun-port and --turn\n"
++		"  --geoip PATH                 an IP-to-country database (.mmdb: DB-IP Country Lite,\n"
++		"                               GeoLite2 Country), reread when it changes: every member\n"
++		"                               gets the member data '@cc' (their country) in each room\n"
++		"  --geoip-private CC           the country for loopback and private addresses (testing)\n";
+ }
+ 
+ // TURN servers arrive as one "host:port:user:pass" argument per --turn flag.
+@@ -200,6 +204,10 @@ static bool ParseArgs(int argc, char* argv[], ServerConfig& config, std::string&
+ 			config.ice.stun_port = (uint16_t)std::strtoul(next(), nullptr, 10);
+ 		} else if (arg == "--ice-file") {
+ 			ice_path = next();
++		} else if (arg == "--geoip") {
++			config.geoip_path = next();
++		} else if (arg == "--geoip-private") {
++			config.geoip_private = next();
+ 		} else if (arg == "--turn") {
+ 			Proto::TurnServer turn;
+ 			if (!ParseTurnServer(next(), turn)) {
+diff --git a/Server/src/weyvelength_server.cpp b/Server/src/weyvelength_server.cpp
+index e859125..193c330 100644
+--- a/Server/src/weyvelength_server.cpp
++++ b/Server/src/weyvelength_server.cpp
+@@ -95,6 +95,8 @@ namespace Weyvelength {
+ 		_acceptor.listen(asio::socket_base::max_listen_connections, ec);
+ 		if (ec) return false;
+ 
++		_geoip.Configure(_config.geoip_path, _config.geoip_private);
++
+ 		spdlog::info("Listening on port {}", config.port);
+ 		LogIceServers(_config.ice);
+ 		return true;
+@@ -140,7 +142,12 @@ namespace Weyvelength {
+ 				continue;
+ 			}
+ 
++			// The country from the address (the client's own claim is never asked).
++			asio::error_code peer_ec;
++			const auto peer = socket.remote_endpoint(peer_ec);
+ 			auto conn = std::make_shared<Connection>(id, std::move(socket));
++			if (!peer_ec)
++				conn->country = _geoip.Country(peer.address());
+ 			_connections.emplace(id, conn);
+ 
+ 			spdlog::info("Client {} connected", id);
+@@ -328,6 +335,7 @@ namespace Weyvelength {
+ 		conn->room = code;
+ 		SendTo(conn->id, Proto::AssignRoomId{ code });
+ 		SendTo(conn->id, Proto::HostChanged{ conn->id }); // the host cache has a single source: this event
++		SetServerCountry(_rooms.at(code), conn);
+ 
+ 		spdlog::info("Client {} created room {}", conn->id, code);
+ 	}
+@@ -391,6 +399,7 @@ namespace Weyvelength {
+ 
+ 		room.members.push_back(conn->id);
+ 		conn->room = msg.id;
++		SetServerCountry(room, conn);
+ 
+ 		spdlog::info("Client {} joined room {}", conn->id, msg.id);
+ 	}
+@@ -501,8 +510,21 @@ namespace Weyvelength {
+ 		SendToMany(room.members, Proto::RoomDataChanged{ msg.key, msg.value });
+ 	}
+ 
++	void Server::SetServerCountry(Room& room, const std::shared_ptr<Connection>& conn)
++	{
++		if (conn->country.empty())
++			return;
++		room.member_data[conn->id][server_country_key] = conn->country;
++		SendToMany(room.members, Proto::MemberDataChanged{ conn->id, server_country_key, conn->country });
++	}
++
+ 	void Server::HandleSetMemberData(const std::shared_ptr<Connection>& conn, const Proto::SetMemberData& msg)
+ 	{
++		// '@' keys are the server's (the country): nobody sets their own.
++		if (!msg.key.empty() && msg.key[0] == '@') {
++			SendTo(conn->id, Proto::RoomError{ Proto::RoomErrorCode::BadRoomData, msg.key });
++			return;
++		}
+ 		auto it = _rooms.find(conn->room);
+ 		if (it == _rooms.end()) {
+ 			SendTo(conn->id, Proto::RoomError{ Proto::RoomErrorCode::NotInRoom, {} });
+@@ -525,7 +547,8 @@ namespace Weyvelength {
+ 		else {
+ 			auto& data = room.member_data[conn->id];
+ 			auto [entry, inserted] = data.try_emplace(msg.key, msg.value);
+-			if (inserted && data.size() > Proto::max_member_data_keys) {
++			// The server's own key does not count against the member's.
++			if (inserted && data.size() > Proto::max_member_data_keys + data.count(server_country_key)) {
+ 				data.erase(entry);
+ 				SendTo(conn->id, Proto::RoomError{ Proto::RoomErrorCode::BadRoomData, msg.key });
+ 				return;

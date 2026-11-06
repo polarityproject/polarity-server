@@ -289,10 +289,8 @@ void JsonString(std::string& out, std::string_view s)
 std::string FormatRoomListJson(const std::vector<ListedRoom>& rooms, const RoomTotals& totals, int64_t unixMs)
 {
     std::string out = "{\"version\":1,\"updated\":" + std::to_string(unixMs) + ",\"totals\":{";
-    out += "\"lobby\":" + std::to_string(totals.lobbyMembers) + ",\"rooms\":" + std::to_string(totals.rooms) +
-           ",\"public_rooms\":" + std::to_string(totals.publicRooms) + ",\"players\":" + std::to_string(totals.players) +
-           ",\"tables\":" + std::to_string(totals.tables) + ",\"tables_playing\":" + std::to_string(totals.tablesPlaying) +
-           "},\"rooms\":[";
+    out += "\"online\":" + std::to_string(totals.online) + ",\"in_public_rooms\":" + std::to_string(totals.inPublicRooms) +
+           ",\"public_rooms\":" + std::to_string(totals.publicRooms) + "},\"rooms\":[";
     for (size_t i = 0; i < rooms.size(); i++) {
         const ListedRoom& r = rooms[i];
         if (i) out += ',';
@@ -309,6 +307,21 @@ std::string FormatRoomListJson(const std::vector<ListedRoom>& rooms, const RoomT
         for (size_t f = 0; f < r.faces.size(); f++) {
             if (f) out += ',';
             JsonString(out, r.faces[f]);
+        }
+        out += "],\"players\":[";
+        auto orNull = [&](const std::string& s) {
+            if (s.empty()) out += "null";
+            else JsonString(out, s);
+        };
+        for (size_t p = 0; p < r.players.size(); p++) {
+            if (p) out += ',';
+            out += "{\"name\":";
+            JsonString(out, r.players[p].name);
+            out += ",\"country\":";
+            orNull(r.players[p].country);
+            out += ",\"face\":";
+            orNull(r.players[p].face);
+            out += '}';
         }
         out += "]}";
     }

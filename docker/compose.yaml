@@ -1,6 +1,8 @@
 # SFVR's custom rooms server on one VPS (docs/rooms-vps-docker.md):
 #   server  the rooms server (Weyvelength), TCP ${SFVR_PORT} (5555)
 #   ice     Cloudflare TURN credentials for it, every 6 hours
+#   geoip   DB-IP's free IP-to-country database for it, every month (members'
+#           countries on the public room lists; IP Geolocation by DB-IP)
 #   keeper  sfvr-keeper, the tables and moderation, a client of the server;
 #           its peer-to-peer links use UDP ${KEEPER_PORTS}
 # Run from this folder: docker compose up -d --build
@@ -30,7 +32,9 @@ services:
     image: sfvr-rooms/server:latest
     environment:
       SFVR_PORT: ${SFVR_PORT:-5555}
-    volumes: ["ice:/data"]
+      # A country for LAN addresses: testing the stack on a PC only.
+      GEOIP_PRIVATE: ${GEOIP_PRIVATE:-}
+    volumes: ["ice:/data", "geoip:/geoip:ro"]
     ulimits:
       nofile: {soft: 65536, hard: 65536}
 
@@ -41,6 +45,13 @@ services:
     # CF_TURN_KEY_ID, CF_TURN_API_TOKEN (cloudflare.env.example).
     env_file: [cloudflare.env]
     volumes: ["ice:/data"]
+    depends_on: [server]
+
+  geoip:
+    <<: *hardened
+    image: sfvr-rooms/server:latest
+    entrypoint: ["/usr/local/bin/geoip-loop.sh"]
+    volumes: ["geoip:/geoip"]
     depends_on: [server]
 
   keeper:
@@ -78,3 +89,4 @@ secrets:
 volumes:
   ice: {}
   keeper: {}
+  geoip: {}
