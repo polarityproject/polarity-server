@@ -371,7 +371,7 @@ void Keeper::OnInRoom(Room& room, const std::string& code, int64_t nowMs)
     else {
         if (room.reclaimed) ReadBackCustom(room);
         if (room.closing) return;
-        Log("keeper: custom room %s, %s, %d tables, %s (%s)", code.c_str(), PresetName(room.settings.preset),
+        Log("keeper: custom room %s, %s, %d tables, %s (%s)", code.c_str(), FormatTitle(room.settings.title).c_str(),
             room.settings.tables, room.settings.isPublic ? "public" : "private", room.host ? "host" : "waiting for host");
         if (room.requester && lobby_) {
             Answer(*lobby_, room.requester, {room.requestSeq, "room", true, code}, nowMs);
@@ -396,7 +396,8 @@ void Keeper::ReadBackCustom(Room& room)
     }
     room.settings.tables = std::clamp(std::atoi(data(kTables).c_str()), 1, kMaxTables);
     room.settings.isPublic = data(kPublic) == "1";
-    room.settings.preset = std::clamp(std::atoi(data(kPreset).c_str()), 0, kPresetCount - 1);
+    // Its title as written (an older or broken one: none).
+    if (!ParseTitle(data(kTitle), &room.settings.title)) room.settings.title = RoomTitle{};
     room.owner = static_cast<uint32_t>(std::strtoul(data(kOwner).c_str(), nullptr, 10));
     if (!room.members.count(room.owner)) {
         room.owner = NextOwner(room.order, 0, weyve_id(room.client));
@@ -421,7 +422,7 @@ void Keeper::SetUpAsHost(Room& room, int64_t nowMs)
         weyve_set_room_listed(c, false);
         WriteData(room, kKind, kKindCustom);
         WriteData(room, kBuild, std::to_string(o_.protocol));
-        WriteData(room, kPreset, std::to_string(room.settings.preset));
+        WriteData(room, kTitle, FormatTitle(room.settings.title));
         WriteData(room, kPublic, room.settings.isPublic ? "1" : "0");
         WriteData(room, kTables, std::to_string(room.settings.tables));
         for (int t = 0; t < room.settings.tables; t++) {
@@ -561,7 +562,7 @@ void Keeper::OnRequest(Room& room, Member& m, const Request& request, int64_t no
             Answer(room, m.id, {request.seq, "room", false, "the keeper cannot reach the server"}, nowMs);
             return;
         }
-        Log("keeper: %s (%u) asks for a room: %s, %d tables, %s", m.name.c_str(), m.id, PresetName(settings.preset),
+        Log("keeper: %s (%u) asks for a room: %s, %d tables, %s", m.name.c_str(), m.id, FormatTitle(settings.title).c_str(),
             settings.tables, settings.isPublic ? "public" : "private");
         weyve_create_room(r->client);
         stats_.roomsAsked++;
@@ -678,7 +679,7 @@ std::vector<ListedRoom> Keeper::PublicList() const
         if (r->closing || !r->inRoom || !r->host || !r->settings.isPublic || !r->ownerArrived || r->members.empty() || r->unlisted) continue;
         ListedRoom l;
         l.code = r->code;
-        l.preset = r->settings.preset;
+        l.title = r->settings.title;
         const auto owner = r->members.find(r->owner);
         l.owner = owner != r->members.end() ? ShownName(*r, r->owner) : std::string();
         l.members = Count(*r);
@@ -1273,7 +1274,7 @@ void Keeper::Commands(int64_t nowMs)
         else if (cmd == "rooms") {
             Log("keeper: operator: lobby %s, %zu custom rooms", lobby_ ? lobby_->code.c_str() : "-", rooms_.size());
             for (const auto& r : rooms_) {
-                Log("keeper:   %s %s %s, %d members, %d tables%s%s", r->code.c_str(), PresetName(r->settings.preset),
+                Log("keeper:   %s %s %s, %d members, %d tables%s%s", r->code.c_str(), FormatTitle(r->settings.title).c_str(),
                     r->settings.isPublic ? "public" : "private", Count(*r), r->settings.tables, r->unlisted ? ", unlisted" : "",
                     r->host ? "" : ", paused");
             }

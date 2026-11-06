@@ -38,7 +38,7 @@ constexpr const char* kBuild = "build";   // the lobby protocol (lobby::kProtoco
 constexpr const char* kCount = "count";   // members, the keeper not counted (lobby listing)
 // Custom room data.
 constexpr const char* kOwner = "owner";   // the owner's member id
-constexpr const char* kPreset = "name";   // the room's name: a preset's number
+constexpr const char* kTitle = "title";  // the room's title (FormatTitle)
 constexpr const char* kPublic = "pub";    // "1" listed in the lobby, "0" by code only
 constexpr const char* kTables = "tables"; // 1..kMaxTables
 // t0..t7: each table's rules (FormatRules).
@@ -63,16 +63,41 @@ std::string ProofMessage(std::string_view room, uint32_t member);
 std::string Base64Encode(const uint8_t* data, size_t size);
 bool Base64Decode(std::string_view text, std::vector<uint8_t>* out);
 
-// --- room names ---
-// Twelve presets (user, 2026-11-02: no free text); sent as their number so a
-// client can show them in its own language later.
-constexpr int kPresetCount = 12;
-const char* PresetName(int preset); // "Casual sets"; "Room" when out of range
+// --- characters ---
+// The roster as the select screen has it (Eleven left out), and each one's
+// name in English (the rooms API; the game's own are all capitals).
+constexpr int kCharacterCount = 45;
+const char* CharacterCode(int index);              // "RYU"; "" out of range
+int CharacterIndex(std::string_view code);         // -1 when not on the roster
+const char* CharacterName(std::string_view code);  // "Chun-Li"; "" when not on the roster
+
+// --- room titles ---
+// SFV's Battle Lounge comments (the game's FixedPhraseCommentSpec table, by
+// its Id; user, 2026-11-06): 0 (no title), 3 ("(Character 1) user looking for
+// (Character 2)!") and 5-18. No free text (user, 2026-11-02): a game sends the
+// Id and, for 3, two character codes; the keeper checks them and writes the
+// English text (the rooms API), and each game shows the game's own text, in
+// its language.
+struct RoomTitle {
+    int id = 0;
+    std::string chara[2]; // Id 3's characters (CharacterCode); empty otherwise
+    bool operator==(const RoomTitle&) const = default;
+};
+constexpr int kTitleCount = 16;
+int TitleId(int index);                 // the index-th offered title's Id (form order); 0 out of range
+int TitleIndex(int id);                 // -1 when the Id is not offered
+int TitleCharacters(int id);            // how many characters it names (2 for 3, else 0)
+bool ValidTitle(const RoomTitle& title); // an offered Id with exactly its characters, each on the roster
+std::string FormatTitle(const RoomTitle& title);              // "5", "3,RYU,KEN"
+bool ParseTitle(std::string_view text, RoomTitle* out);       // valid titles only
+const char* TitleTemplate(int id);      // the English text with {common1}/{common2}; "" for 0 and unknown Ids
+std::string TitleText(const RoomTitle& title); // in English with the names; "" for no title
 
 // --- requests (member data `rq`) ---
 // "<seq>:<kind>[:<arg>]..."; args hold no ':'.
-//   room:<tables>:<public 0|1>:<preset>   create a custom room; answered with
-//                                         its code (the requester is its owner)
+//   room:<tables>:<public 0|1>:<title>    create a custom room (FormatTitle);
+//                                         answered with its code (the requester
+//                                         is its owner)
 struct Request {
     uint32_t seq = 0;
     std::string kind;
@@ -84,7 +109,7 @@ bool ParseRequest(std::string_view text, Request* out);
 struct RoomSettings {
     int tables = kDefaultTables;
     bool isPublic = true;
-    int preset = 0;
+    RoomTitle title;
 };
 Request RoomRequest(uint32_t seq, const RoomSettings& settings);
 bool ParseRoomSettings(const Request& request, RoomSettings* out);
@@ -104,7 +129,7 @@ bool ParseAnswer(const uint8_t* data, size_t size, Answer* out);
 // --- the public room list (lobby room data pr0..pr15) ---
 struct ListedRoom {
     std::string code;
-    int preset = 0;
+    RoomTitle title;
     std::string owner;       // the owner's name
     int members = 0;         // the keeper not counted
     int tables = 1;
@@ -143,7 +168,8 @@ struct RoomTotals {
 };
 // {"version":1,"updated":<unix ms>,"totals":{"online":..,"in_public_rooms":..,
 // "public_rooms":..},"rooms":[{"code":..,
-// "preset":"Casual sets","owner":..,"members":..,"capacity":16,"tables":..,
+// "title":"Beginners Welcome!"|null,"title_id":10,"title_characters":[..],"owner":..,
+// "members":..,"capacity":16,"tables":..,
 // "open_seats":..,"rules":..,"faces":[..],"players":[{"name":..,"country":"DE"|null,
 // "face":"RYU"|null}]}]}; strings escaped for JSON.
 std::string FormatRoomListJson(const std::vector<ListedRoom>& rooms, const RoomTotals& totals, int64_t unixMs);

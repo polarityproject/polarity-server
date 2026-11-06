@@ -323,7 +323,8 @@ a Cloudflare Worker (`cloudflare/rooms-api`). The VPS pushes the list to it
 GET https://sfvr-rooms-api.<your account>.workers.dev/v1/rooms
 {"version":1,"updated":1793992354396,"age":4,"stale":false,
  "attribution":"IP Geolocation by DB-IP (https://db-ip.com), CC BY 4.0",
- "rooms":[{"code":"4SLJEV","preset":"Casual sets","owner":"Owner","members":3,
+ "rooms":[{"code":"4SLJEV","title":"Karin user looking for M. Bison!","title_id":3,
+           "title_characters":["KRN","VEG"],"owner":"Owner","members":3,
            "capacity":16,"tables":2,"open_seats":2,"rules":"r1 ft2 bo3 t99 ws3",
            "faces":["RYU","KEN"],
            "players":[{"name":"Owner","country":"DE","face":"RYU"},
@@ -338,6 +339,12 @@ GET .../v1/summary
 - Only public rooms are listed (as the game lists them, without the game's
   limit of what fits its lobby data). Names are as the room shows them (the
   name filter's `Player N`).
+- `title`: the room's title, the English of the Street Fighter V Battle Lounge
+  comment its owner picked (`null`: none; show something like "Owner's room").
+  `title_id` is the comment's number in the game's table (0, 3, 5-18 are
+  offered) and `title_characters` the character codes Id 3 names (`KRN`,
+  `VEG`). The game sends only the number and codes; the keeper checks them
+  and writes the text, so a modified game cannot put its own words in a title.
 - `players`: every member in join order, with their country and character.
   The country is the rooms server's own lookup of the player's address in
   DB-IP's free database (`geoip`), never anything the game claims: the

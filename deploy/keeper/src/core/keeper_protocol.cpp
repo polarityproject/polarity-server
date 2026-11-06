@@ -59,7 +59,7 @@ std::string EncodeEntry(const ListedRoom& r)
         if (i) faces += ',';
         faces += Clean(r.faces[i]);
     }
-    return Clean(r.code) + '\t' + std::to_string(r.preset) + '\t' + std::to_string(r.members) + '\t' +
+    return Clean(r.code) + '\t' + FormatTitle(r.title) + '\t' + std::to_string(r.members) + '\t' +
            std::to_string(r.tables) + '\t' + std::to_string(r.openSeats) + '\t' + Clean(r.rules) + '\t' + faces + '\t' +
            Clean(r.owner);
 }
@@ -70,7 +70,7 @@ bool DecodeEntry(std::string_view text, ListedRoom* out)
     if (f.size() != 8 || f[0].empty()) return false;
     ListedRoom r;
     r.code = std::string(f[0]);
-    if (!Int(f[1], &r.preset) || !Int(f[2], &r.members) || !Int(f[3], &r.tables) || !Int(f[4], &r.openSeats)) return false;
+    if (!ParseTitle(f[1], &r.title) || !Int(f[2], &r.members) || !Int(f[3], &r.tables) || !Int(f[4], &r.openSeats)) return false;
     r.rules = std::string(f[5]);
     if (!f[6].empty()) {
         for (std::string_view face : Split(f[6], ',')) r.faces.emplace_back(face);
@@ -128,13 +128,119 @@ bool Base64Decode(std::string_view text, std::vector<uint8_t>* out)
     return pad <= 2 && (text.size() % 4 == 0);
 }
 
-const char* PresetName(int preset)
+namespace {
+
+// In the game's own order; names as the game spells them, in normal case.
+const struct {
+    const char* code;
+    const char* name;
+} kCharacters[kCharacterCount] = {
+    {"RYU", "Ryu"},     {"VEG", "M. Bison"}, {"CNL", "Chun-Li"}, {"KEN", "Ken"},      {"KRN", "Karin"},   {"ZGF", "Zangief"},
+    {"DSM", "Dhalsim"}, {"NSH", "Nash"},     {"BLR", "Vega"},    {"JRI", "Juri"},     {"BRD", "Birdie"},  {"RMK", "R. Mika"},
+    {"RSD", "Rashid"},  {"FAN", "F.A.N.G"},  {"LAR", "Laura"},   {"NCL", "Necalli"},  {"CMY", "Cammy"},   {"GUL", "Guile"},
+    {"IBK", "Ibuki"},   {"BSN", "Balrog"},   {"URN", "Urien"},   {"ALX", "Alex"},     {"Z21", "Akuma"},   {"Z20", "Kolin"},
+    {"Z22", "Ed"},      {"Z23", "Menat"},    {"Z24", "Abigail"}, {"Z25", "Zeku"},     {"Z26", "Sakura"},  {"Z27", "Blanka"},
+    {"Z28", "Falke"},   {"Z29", "Cody"},     {"Z30", "G"},       {"Z31", "Sagat"},    {"Z32", "Kage"},    {"Z33", "Poison"},
+    {"Z34", "E. Honda"}, {"Z35", "Lucia"},   {"Z36", "Gill"},    {"Z37", "Seth"},     {"Z38", "Dan"},     {"Z39", "Rose"},
+    {"Z40", "Oro"},     {"Z41", "Akira"},    {"Z42", "Luke"}};
+
+// The offered titles, in the form's order: the game's FixedPhraseCommentSpec
+// Id and its English CommentText (trailing spaces trimmed).
+const struct {
+    int id;
+    const char* text;
+} kTitles[kTitleCount] = {
+    {0, ""},
+    {3, "{common1} user looking for {common2}!"},
+    {5, "Hardcore match! Main character only!"},
+    {6, "Sub-character practice is allowed"},
+    {7, "Serious match!"},
+    {8, "Seeking someone stronger than me!"},
+    {9, "If it's to win, anything goes."},
+    {10, "Beginners Welcome!"},
+    {11, "Anyone will do."},
+    {12, "Let's have some casual fun!"},
+    {13, "Let's hunker down!"},
+    {14, "Fighting all night! Let's do this!"},
+    {15, "I don't care if I win or lose!"},
+    {16, "Random character matches"},
+    {17, "I'm streaming."},
+    {18, "I'm recording commentary"}};
+
+} // namespace
+
+const char* CharacterCode(int index) { return index >= 0 && index < kCharacterCount ? kCharacters[index].code : ""; }
+
+int CharacterIndex(std::string_view code)
 {
-    static const char* const kNames[kPresetCount] = {
-        "Casual sets",        "Long sets",           "Beginners welcome", "Learning a character",
-        "Ranked warmup",      "Tournament practice", "Mirror matches",    "Quick rotation",
-        "Anything goes",      "Chill and chat",      "Late night",        "Friends only"};
-    return preset >= 0 && preset < kPresetCount ? kNames[preset] : "Room";
+    for (int i = 0; i < kCharacterCount; i++) {
+        if (code == kCharacters[i].code) return i;
+    }
+    return -1;
+}
+
+const char* CharacterName(std::string_view code)
+{
+    const int i = CharacterIndex(code);
+    return i >= 0 ? kCharacters[i].name : "";
+}
+
+int TitleId(int index) { return index >= 0 && index < kTitleCount ? kTitles[index].id : 0; }
+
+int TitleIndex(int id)
+{
+    for (int i = 0; i < kTitleCount; i++) {
+        if (kTitles[i].id == id) return i;
+    }
+    return -1;
+}
+
+int TitleCharacters(int id) { return id == 3 ? 2 : 0; }
+
+bool ValidTitle(const RoomTitle& title)
+{
+    if (TitleIndex(title.id) < 0) return false;
+    const int n = TitleCharacters(title.id);
+    for (int i = 0; i < 2; i++) {
+        if (i < n ? CharacterIndex(title.chara[i]) < 0 : !title.chara[i].empty()) return false;
+    }
+    return true;
+}
+
+std::string FormatTitle(const RoomTitle& title)
+{
+    std::string s = std::to_string(title.id);
+    for (int i = 0; i < TitleCharacters(title.id); i++) s += "," + title.chara[i];
+    return s;
+}
+
+bool ParseTitle(std::string_view text, RoomTitle* out)
+{
+    const auto f = Split(text, ',');
+    RoomTitle t;
+    if (f.empty() || !Int(f[0], &t.id)) return false;
+    if (static_cast<int>(f.size()) != 1 + TitleCharacters(t.id)) return false;
+    for (size_t i = 1; i < f.size(); i++) t.chara[i - 1] = std::string(f[i]);
+    if (!ValidTitle(t)) return false;
+    *out = std::move(t);
+    return true;
+}
+
+const char* TitleTemplate(int id)
+{
+    const int i = TitleIndex(id);
+    return i >= 0 ? kTitles[i].text : "";
+}
+
+std::string TitleText(const RoomTitle& title)
+{
+    std::string s = TitleTemplate(title.id);
+    for (int i = 0; i < 2; i++) {
+        const std::string key = "{common" + std::to_string(i + 1) + "}";
+        const size_t at = s.find(key);
+        if (at != std::string::npos) s.replace(at, key.size(), CharacterName(title.chara[i]));
+    }
+    return s;
 }
 
 std::string FormatRequest(const Request& request)
@@ -160,7 +266,7 @@ bool ParseRequest(std::string_view text, Request* out)
 
 Request RoomRequest(uint32_t seq, const RoomSettings& settings)
 {
-    return {seq, "room", {std::to_string(settings.tables), settings.isPublic ? "1" : "0", std::to_string(settings.preset)}};
+    return {seq, "room", {std::to_string(settings.tables), settings.isPublic ? "1" : "0", FormatTitle(settings.title)}};
 }
 
 bool ParseRoomSettings(const Request& request, RoomSettings* out)
@@ -168,8 +274,8 @@ bool ParseRoomSettings(const Request& request, RoomSettings* out)
     if (request.kind != "room" || request.args.size() != 3) return false;
     RoomSettings s;
     int pub = 0;
-    if (!Int(request.args[0], &s.tables) || !Int(request.args[1], &pub) || !Int(request.args[2], &s.preset)) return false;
-    if (s.tables < 1 || s.tables > kMaxTables || (pub != 0 && pub != 1) || s.preset < 0 || s.preset >= kPresetCount) return false;
+    if (!Int(request.args[0], &s.tables) || !Int(request.args[1], &pub) || !ParseTitle(request.args[2], &s.title)) return false;
+    if (s.tables < 1 || s.tables > kMaxTables || (pub != 0 && pub != 1)) return false;
     s.isPublic = pub == 1;
     *out = s;
     return true;
@@ -296,8 +402,15 @@ std::string FormatRoomListJson(const std::vector<ListedRoom>& rooms, const RoomT
         if (i) out += ',';
         out += "{\"code\":";
         JsonString(out, r.code);
-        out += ",\"preset\":";
-        JsonString(out, PresetName(r.preset));
+        out += ",\"title\":";
+        if (const std::string text = TitleText(r.title); text.empty()) out += "null";
+        else JsonString(out, text);
+        out += ",\"title_id\":" + std::to_string(r.title.id) + ",\"title_characters\":[";
+        for (int k = 0; k < TitleCharacters(r.title.id); k++) {
+            if (k) out += ',';
+            JsonString(out, r.title.chara[k]);
+        }
+        out += "]";
         out += ",\"owner\":";
         JsonString(out, r.owner);
         out += ",\"members\":" + std::to_string(r.members) + ",\"capacity\":" + std::to_string(kRoomCap) +

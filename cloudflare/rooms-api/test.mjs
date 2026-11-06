@@ -20,7 +20,7 @@ const doc = {
   version: 1,
   updated: Date.now() - 5000,
   totals: { online: 12, in_public_rooms: 2, public_rooms: 1 },
-  rooms: [{ code: "ABC123", preset: "Casual sets", owner: "Laptop", members: 2, capacity: 16, tables: 2, open_seats: 1, rules: "r1 ft2 bo3 t99 ws3", faces: ["RYU"],
+  rooms: [{ code: "ABC123", title: "Beginners Welcome!", title_id: 10, title_characters: [], owner: "Laptop", members: 2, capacity: 16, tables: 2, open_seats: 1, rules: "r1 ft2 bo3 t99 ws3", faces: ["RYU"],
     players: [{ name: "Laptop", country: "DE", face: "RYU" }, { name: "PolarityDev", country: null, face: null }] }],
 };
 

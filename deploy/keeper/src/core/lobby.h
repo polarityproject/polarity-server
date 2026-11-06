@@ -46,11 +46,12 @@
 namespace sfv::lobby {
 
 constexpr uint32_t kMagic = 0x4E564653; // "SFVN"
-constexpr uint16_t kProtocol = 14; // 7: names up to 96 bytes of UTF-8; 8: the match list for spectators; 9: the stage lock;
+constexpr uint16_t kProtocol = 16; // 7: names up to 96 bytes of UTF-8; 8: the match list for spectators; 9: the stage lock;
                                    // 11: whether each side sends desync reports; 13: each player's character version;
                                    // 14: the rooms branch (0.3.0-rooms.N), so its builds and 0.2.x refuse each other
                                    // (12 was its number before main took 13; a main bump past 13 takes 15): the seat
-                                   // token in Hello
+                                   // token in Hello; 16: the rooms branch's room titles (SFV's lounge comments, the
+                                   // keeper's room request and public list; 15 stays main's next)
 // Message size limits: under Weyvelength's 1024-byte datagrams.
 constexpr size_t kHashesPerMessage = 100;
 constexpr size_t kRegionsPerRequest = 200;
