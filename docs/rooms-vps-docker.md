@@ -349,8 +349,11 @@ GET .../v1/summary
   The country is the rooms server's own lookup of the player's address in
   DB-IP's free database (`geoip`), never anything the game claims: the
   server gives each member the member data `@cc` and refuses `@` keys from
-  clients. A VPN shows its exit's country; `null` when unknown. Players are
-  not asked; the notice about it is on the SFVR site.
+  clients. A VPN shows its exit's country; `null` when unknown. The game
+  shows the same flags beside names, and a player who turns "Country flag"
+  off in SFVR's settings sends member data `nocc=1`: the server then gives
+  them no `@cc` at all (here as `null`), in every room. The notice about it is
+  on the SFVR site.
 - **Attribution**: DB-IP's licence (CC BY 4.0) asks whoever shows the countries
   to credit them: the `attribution` line, or `IP Geolocation by DB-IP` with a
   link to https://db-ip.com, beside the flags on a page or in an embed.

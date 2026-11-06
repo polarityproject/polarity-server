@@ -81,7 +81,7 @@ index 0000000..0ed8ee2
 +	};
 +}
 diff --git a/Server/include/weyvelength_server.h b/Server/include/weyvelength_server.h
-index 896d780..57b956e 100644
+index 896d780..1d60dc2 100644
 --- a/Server/include/weyvelength_server.h
 +++ b/Server/include/weyvelength_server.h
 @@ -16,6 +16,7 @@
@@ -92,7 +92,7 @@ index 896d780..57b956e 100644
  #include "protocol.h"
  
  namespace Weyvelength {
-@@ -25,12 +26,20 @@ namespace Weyvelength {
+@@ -25,12 +26,26 @@ namespace Weyvelength {
  		uint32_t room_code_length = 0; // 0 = use the default (8)
  		uint32_t room_list_cooldown_ms = 0; // 0 = use the default (1000)
  		Proto::IceServers ice; // stun/turn handed to every client on connect
@@ -104,24 +104,31 @@ index 896d780..57b956e 100644
 +	// country (ISO 3166-1 alpha-2) from their address. Keys starting with '@'
 +	// are the server's: clients cannot set them.
 +	inline constexpr const char* server_country_key = "@cc";
++	// The member data key a client sets to "1" to keep its country to itself:
++	// the server then leaves "@cc" off it (and takes it back off the room it is
++	// in). Any other value, or deleting it, shows the country again. Never
++	// stored or announced; set it right after connecting, before a room.
++	inline constexpr const char* hide_country_key = "nocc";
 +
  	struct Connection {
  		uint32_t id = 0;
  		std::string room; // empty = not in a room
  		std::string name = Proto::default_client_name; // never empty; fixed while in a room
 +		std::string country; // from the address at connect (GeoIp); "" = unknown
++		bool hide_country = false; // asked with "nocc" (hide_country_key)
  		asio::ip::tcp::socket socket;
  
  		std::deque<std::vector<std::byte>> out; // outbound queue; WriteLoop is the sole writer
-@@ -91,6 +100,7 @@ namespace Weyvelength {
+@@ -91,6 +106,8 @@ namespace Weyvelength {
  		void HandleListRooms(const std::shared_ptr<Connection>& conn, const Proto::ListRooms& msg);
  
  		void LeaveRoom(const std::shared_ptr<Connection>& conn);
 +		void SetServerCountry(Room& room, const std::shared_ptr<Connection>& conn); // "@cc" for a member just in
++		void SetHideCountry(const std::shared_ptr<Connection>& conn, bool hide); // "nocc"
  		const std::string& MemberName(uint32_t id) const; // the default if the connection is gone
  		Room* HostRoom(const std::shared_ptr<Connection>& conn); // the sender's room if they host it, else null after sending the error
  
-@@ -112,5 +122,6 @@ namespace Weyvelength {
+@@ -112,5 +129,6 @@ namespace Weyvelength {
  		uint32_t _next_slot = 1;   // slots never yet handed out; 0 reserved as "none"
  
  		ServerConfig _config;
@@ -283,7 +290,7 @@ index ae1c0d1..37a42c9 100644
  			Proto::TurnServer turn;
  			if (!ParseTurnServer(next(), turn)) {
 diff --git a/Server/src/weyvelength_server.cpp b/Server/src/weyvelength_server.cpp
-index e859125..193c330 100644
+index e859125..19755e2 100644
 --- a/Server/src/weyvelength_server.cpp
 +++ b/Server/src/weyvelength_server.cpp
 @@ -95,6 +95,8 @@ namespace Weyvelength {
@@ -324,16 +331,37 @@ index e859125..193c330 100644
  
  		spdlog::info("Client {} joined room {}", conn->id, msg.id);
  	}
-@@ -501,8 +510,21 @@ namespace Weyvelength {
+@@ -501,8 +510,47 @@ namespace Weyvelength {
  		SendToMany(room.members, Proto::RoomDataChanged{ msg.key, msg.value });
  	}
  
 +	void Server::SetServerCountry(Room& room, const std::shared_ptr<Connection>& conn)
 +	{
-+		if (conn->country.empty())
++		if (conn->country.empty() || conn->hide_country)
 +			return;
 +		room.member_data[conn->id][server_country_key] = conn->country;
 +		SendToMany(room.members, Proto::MemberDataChanged{ conn->id, server_country_key, conn->country });
++	}
++
++	void Server::SetHideCountry(const std::shared_ptr<Connection>& conn, bool hide)
++	{
++		if (conn->hide_country == hide)
++			return;
++		conn->hide_country = hide;
++		auto it = _rooms.find(conn->room);
++		if (it == _rooms.end())
++			return; // the next room it joins or makes goes by the new choice
++		Room& room = it->second;
++		if (!hide) {
++			SetServerCountry(room, conn);
++			return;
++		}
++		auto member = room.member_data.find(conn->id);
++		if (member == room.member_data.end() || member->second.erase(server_country_key) == 0)
++			return;
++		if (member->second.empty())
++			room.member_data.erase(member);
++		SendToMany(room.members, Proto::MemberDataChanged{ conn->id, server_country_key, {} });
 +	}
 +
  	void Server::HandleSetMemberData(const std::shared_ptr<Connection>& conn, const Proto::SetMemberData& msg)
@@ -343,10 +371,15 @@ index e859125..193c330 100644
 +			SendTo(conn->id, Proto::RoomError{ Proto::RoomErrorCode::BadRoomData, msg.key });
 +			return;
 +		}
++		// Keeping the country hidden: a setting of the connection, in a room or not.
++		if (msg.key == hide_country_key) {
++			SetHideCountry(conn, msg.value == "1");
++			return;
++		}
  		auto it = _rooms.find(conn->room);
  		if (it == _rooms.end()) {
  			SendTo(conn->id, Proto::RoomError{ Proto::RoomErrorCode::NotInRoom, {} });
-@@ -525,7 +547,8 @@ namespace Weyvelength {
+@@ -525,7 +573,8 @@ namespace Weyvelength {
  		else {
  			auto& data = room.member_data[conn->id];
  			auto [entry, inserted] = data.try_emplace(msg.key, msg.value);

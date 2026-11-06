@@ -8,7 +8,8 @@ FROM ubuntu:24.04 AS build
 # weyvelength) and deploy/install.sh: the server and the clients speak the
 # protocol of the same commit. The mod's patches only change the client; this
 # image's own patch (weyvelength-geoip.patch) only the server: members'
-# countries from their addresses (--geoip, member data "@cc").
+# countries from their addresses (--geoip, member data "@cc"; a member's
+# "nocc"=1 keeps theirs hidden).
 ARG WEYVELENGTH_COMMIT=d4e25c7da7aab18ff82d60d275ea95f794bb2ec9
 RUN apt-get update \
  && apt-get install -y --no-install-recommends build-essential cmake git ca-certificates libmaxminddb-dev \

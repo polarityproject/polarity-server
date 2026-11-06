@@ -61,13 +61,13 @@ std::string EncodeEntry(const ListedRoom& r)
     }
     return Clean(r.code) + '\t' + FormatTitle(r.title) + '\t' + std::to_string(r.members) + '\t' +
            std::to_string(r.tables) + '\t' + std::to_string(r.openSeats) + '\t' + Clean(r.rules) + '\t' + faces + '\t' +
-           Clean(r.owner);
+           Clean(r.owner) + '\t' + CleanCountry(r.ownerCountry);
 }
 
 bool DecodeEntry(std::string_view text, ListedRoom* out)
 {
     const auto f = Split(text, '\t');
-    if (f.size() != 8 || f[0].empty()) return false;
+    if (f.size() != 9 || f[0].empty()) return false;
     ListedRoom r;
     r.code = std::string(f[0]);
     if (!ParseTitle(f[1], &r.title) || !Int(f[2], &r.members) || !Int(f[3], &r.tables) || !Int(f[4], &r.openSeats)) return false;
@@ -76,11 +76,21 @@ bool DecodeEntry(std::string_view text, ListedRoom* out)
         for (std::string_view face : Split(f[6], ',')) r.faces.emplace_back(face);
     }
     r.owner = std::string(f[7]);
+    r.ownerCountry = CleanCountry(f[8]);
     *out = std::move(r);
     return true;
 }
 
 } // namespace
+
+std::string CleanCountry(std::string_view code)
+{
+    if (code.size() != 2) return {};
+    for (char c : code) {
+        if (c < 'A' || c > 'Z') return {};
+    }
+    return std::string(code);
+}
 
 std::string TableKey(int table) { return "t" + std::to_string(table); }
 std::string ListKey(int index) { return "pr" + std::to_string(index); }
@@ -480,7 +490,7 @@ std::vector<std::string> PackRoomDetail(const RoomDetail& detail, size_t partByt
     };
     std::vector<std::string> records;
     for (const std::string& t : detail.tables) records.push_back("t" + clean(t));
-    for (const RoomDetail::Person& p : detail.people) records.push_back("p" + clean(p.chara) + "\x1F" + clean(p.name));
+    for (const RoomDetail::Person& p : detail.people) records.push_back("p" + clean(p.chara) + "\x1F" + CleanCountry(p.country) + "\x1F" + clean(p.name));
     std::vector<std::string> bodies;
     std::string body;
     for (const std::string& r : records) {
@@ -517,9 +527,10 @@ bool JoinRoomDetail(const std::vector<std::string>& records, RoomDetail* out)
             if (r.empty()) return false;
             if (r[0] == 't') d.tables.emplace_back(r.substr(1));
             else if (r[0] == 'p') {
-                const size_t us = r.find('\x1F');
-                if (us == std::string_view::npos) return false;
-                d.people.push_back({std::string(r.substr(us + 1)), std::string(r.substr(1, us - 1))});
+                const size_t us = r.find('\x1F'), us2 = us == std::string_view::npos ? us : r.find('\x1F', us + 1);
+                if (us2 == std::string_view::npos) return false;
+                d.people.push_back({std::string(r.substr(us2 + 1)), std::string(r.substr(1, us - 1)),
+                                    CleanCountry(r.substr(us + 1, us2 - us - 1))});
             }
             else return false;
         }

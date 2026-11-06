@@ -682,6 +682,7 @@ std::vector<ListedRoom> Keeper::PublicList() const
         l.title = r->settings.title;
         const auto owner = r->members.find(r->owner);
         l.owner = owner != r->members.end() ? ShownName(*r, r->owner) : std::string();
+        l.ownerCountry = owner != r->members.end() ? owner->second.country : std::string();
         l.members = Count(*r);
         l.tables = r->settings.tables;
         l.openSeats = 0;
@@ -886,7 +887,7 @@ void Keeper::Peek(Room& lobby, Member& m, const Request& request, int64_t nowMs)
     }
     for (uint32_t id : room->order) {
         const auto p = room->members.find(id);
-        if (p != room->members.end()) d.people.push_back({ShownName(*room, id), p->second.chara});
+        if (p != room->members.end()) d.people.push_back({ShownName(*room, id), p->second.chara, p->second.country});
     }
     for (const std::string& part : PackRoomDetail(d)) {
         lobby.outbox.push_back({m.id, request.seq, FormatAnswer({request.seq, "peek", true, part}), nowMs, nowMs + 5000});

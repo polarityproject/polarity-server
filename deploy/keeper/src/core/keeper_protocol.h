@@ -126,11 +126,15 @@ struct Answer {
 std::string FormatAnswer(const Answer& answer);
 bool ParseAnswer(const uint8_t* data, size_t size, Answer* out);
 
+// A country code as the rooms server gives it: two letters A-Z, else "".
+std::string CleanCountry(std::string_view code);
+
 // --- the public room list (lobby room data pr0..pr15) ---
 struct ListedRoom {
     std::string code;
     RoomTitle title;
     std::string owner;       // the owner's name
+    std::string ownerCountry; // the owner's ISO 3166 alpha-2 (member data `@cc`); "" unknown or hidden
     int members = 0;         // the keeper not counted
     int tables = 1;
     int openSeats = 0;       // seats nobody sits in, over all tables
@@ -203,7 +207,8 @@ private:
 // each table's rules and the players. Answered in parts (a datagram holds
 // 1024 bytes; 16 names of up to 96 bytes do not fit one): each part's text is
 // "<i>/<n>\x1D<records>", records split by \x1E: "t<rules>" per table, then
-// "p<chara>\x1F<name>" per player. The parts share the request's sequence
+// "p<chara>\x1F<country>\x1F<name>" per player (country: ISO 3166 alpha-2 or
+// empty). The parts share the request's sequence
 // number; the player acknowledges once it has them all.
 struct RoomDetail {
     std::string code;
@@ -211,6 +216,7 @@ struct RoomDetail {
     struct Person {
         std::string name;
         std::string chara;
+        std::string country; // ISO 3166 alpha-2; "" unknown or hidden
         bool operator==(const Person&) const = default;
     };
     std::vector<Person> people;
