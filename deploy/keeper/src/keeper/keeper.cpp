@@ -833,19 +833,27 @@ std::vector<ListedRoom> Keeper::PublicList() const
     return list;
 }
 
-int Keeper::OnlineFromServer() const
+Keeper::ServerStats Keeper::ReadServerStats() const
 {
-    if (o_.serverStatsPath.empty()) return -1;
+    ServerStats stats;
+    if (o_.serverStatsPath.empty()) return stats;
     std::error_code ec;
     const auto written = std::filesystem::last_write_time(o_.serverStatsPath, ec);
-    if (ec || std::filesystem::file_time_type::clock::now() - written > std::chrono::seconds(30)) return -1;
+    if (ec) return stats;
+    stats.ageSeconds = std::max(0.0, std::chrono::duration<double>(std::filesystem::file_time_type::clock::now() - written).count());
     std::ifstream in(o_.serverStatsPath);
     std::stringstream text;
     text << in.rdbuf();
     const std::string s = text.str();
     const size_t at = s.find("\"connections\":");
-    if (at == std::string::npos) return -1;
-    const long connections = std::strtol(s.c_str() + at + 14, nullptr, 10);
+    if (at != std::string::npos) stats.connections = std::strtol(s.c_str() + at + 14, nullptr, 10);
+    return stats;
+}
+
+int Keeper::OnlineFromServer(const ServerStats& stats) const
+{
+    if (!stats.Fresh()) return -1;
+    const long connections = stats.connections;
     // Connections that are not one player each: the keeper's own (a room,
     // relay rooms), and the second ones players open for a match (both
     // players of a table set) or to watch one through a relay.
@@ -864,20 +872,27 @@ int Keeper::OnlineFromServer() const
     return static_cast<int>(std::max(0L, connections - others));
 }
 
-std::string Keeper::StatusJson(int64_t unixMs) const
+int Keeper::PlayersOnline(bool* fromServer) const
 {
     // From the server when it says (browsing players are in no room); else a
-    // hub is in one room at a time (the lobby channel or a custom room), so
-    // the members add up without counting anyone twice.
-    RoomTotals totals;
-    totals.online = OnlineFromServer();
-    if (totals.online < 0) {
-        totals.online = 0;
-        if (lobby_ && lobby_->inRoom) totals.online = Count(*lobby_);
-        for (const auto& r : rooms_) {
-            if (!r->closing && r->inRoom) totals.online += Count(*r);
-        }
+    // player is in one room at a time (the desk or a custom room), so the
+    // members add up without counting anyone twice.
+    const int online = OnlineFromServer(ReadServerStats());
+    *fromServer = online >= 0;
+    if (online >= 0) return online;
+    int members = 0;
+    if (lobby_ && lobby_->inRoom) members = Count(*lobby_);
+    for (const auto& r : rooms_) {
+        if (!r->closing && r->inRoom) members += Count(*r);
     }
+    return members;
+}
+
+std::string Keeper::StatusJson(int64_t unixMs) const
+{
+    RoomTotals totals;
+    bool fromServer = false;
+    totals.online = PlayersOnline(&fromServer);
     const std::vector<ListedRoom> list = PublicList();
     totals.publicRooms = static_cast<int>(list.size());
     for (const ListedRoom& l : list) totals.inPublicRooms += l.members;
@@ -974,10 +989,27 @@ std::string Keeper::MetricsText()
             if (rl->core) viewers += static_cast<int>(rl->core->Stats().viewers);
         }
     }
-    head("sfvr_keeper_lobby_up", "gauge", "1 when the keeper hosts the lobby channel.");
+    head("sfvr_keeper_lobby_up", "gauge", "1 when the keeper hosts the desk (the lobby channel: room requests, the list's summary).");
     line("sfvr_keeper_lobby_up", "", lobby_ && lobby_->inRoom && lobby_->host ? 1.0 : 0.0);
-    head("sfvr_keeper_lobby_members", "gauge", "Members of the lobby channel (hubs).");
+    head("sfvr_keeper_lobby_members", "gauge", "Members of the desk: players with the custom rooms screen open (the hub alone is in no room).");
     line("sfvr_keeper_lobby_members", "", lobby_ && lobby_->inRoom ? Count(*lobby_) : 0.0);
+    // Players online (the rooms API's `online`): from the server's connection
+    // count while its stats file is fresh, else only the members of rooms.
+    bool fromServer = false;
+    const int online = PlayersOnline(&fromServer);
+    head("sfvr_keeper_players_online", "gauge", "Players connected to the rooms server (on the hub, at the desk or in a room), as the rooms API gives them.");
+    line("sfvr_keeper_players_online", "", online);
+    head("sfvr_keeper_online_from_server", "gauge", "1 while players online come from the server's connection count; 0: its stats file is missing or stale (only room members are counted).");
+    line("sfvr_keeper_online_from_server", "", fromServer ? 1.0 : 0.0);
+    const ServerStats server = ReadServerStats();
+    if (server.connections >= 0) {
+        head("sfvr_keeper_server_connections", "gauge", "Connections to the rooms server (its --stats file): players, the keeper's own, match and relay connections.");
+        line("sfvr_keeper_server_connections", "", static_cast<double>(server.connections));
+    }
+    if (server.ageSeconds >= 0) {
+        head("sfvr_keeper_server_stats_age_seconds", "gauge", "How old the rooms server's stats file is (it writes it every 5 s).");
+        line("sfvr_keeper_server_stats_age_seconds", "", server.ageSeconds);
+    }
     head("sfvr_keeper_rooms", "gauge", "Custom rooms the keeper is in.");
     line("sfvr_keeper_rooms", "", rooms);
     head("sfvr_keeper_public_rooms", "gauge", "Custom rooms on the public list.");

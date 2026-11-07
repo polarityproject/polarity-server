@@ -48,8 +48,8 @@
     {
       "id": 2,
       "type": "stat",
-      "title": "Lobby",
-      "description": "Whether the keeper hosts the lobby channel.",
+      "title": "Desk",
+      "description": "Whether the keeper hosts the desk (the lobby channel): room requests go through it and its listing carries the public list's summary. Down: players see custom rooms as offline.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -57,7 +57,7 @@
       "gridPos": {
         "x": 0,
         "y": 1,
-        "w": 3,
+        "w": 2,
         "h": 4
       },
       "targets": [
@@ -127,7 +127,7 @@
         "uid": "prometheus"
       },
       "gridPos": {
-        "x": 3,
+        "x": 2,
         "y": 1,
         "w": 3,
         "h": 4
@@ -184,16 +184,71 @@
     {
       "id": 4,
       "type": "stat",
-      "title": "In the lobby",
-      "description": "",
+      "title": "Online",
+      "description": "Players connected to the rooms server: on the hub, at the desk or in a room (the rooms API's online). From the server's connection count; if its stats file is stale, only room members (see Members).",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
       "gridPos": {
-        "x": 6,
+        "x": 5,
         "y": 1,
         "w": 3,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sfvr_keeper_players_online",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "auto",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "At the desk",
+      "description": "Players with the custom rooms screen open (they join the desk to make rooms and see previews). The hub alone is in no room.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 1,
+        "w": 2,
         "h": 4
       },
       "targets": [
@@ -237,7 +292,7 @@
       }
     },
     {
-      "id": 5,
+      "id": 6,
       "type": "stat",
       "title": "Rooms",
       "description": "",
@@ -246,9 +301,9 @@
         "uid": "prometheus"
       },
       "gridPos": {
-        "x": 9,
+        "x": 10,
         "y": 1,
-        "w": 3,
+        "w": 2,
         "h": 4
       },
       "targets": [
@@ -292,7 +347,7 @@
       }
     },
     {
-      "id": 6,
+      "id": 7,
       "type": "stat",
       "title": "Public rooms",
       "description": "",
@@ -347,7 +402,7 @@
       }
     },
     {
-      "id": 7,
+      "id": 8,
       "type": "stat",
       "title": "In rooms",
       "description": "",
@@ -402,7 +457,7 @@
       }
     },
     {
-      "id": 8,
+      "id": 9,
       "type": "stat",
       "title": "Tables playing",
       "description": "",
@@ -457,7 +512,7 @@
       }
     },
     {
-      "id": 9,
+      "id": 10,
       "type": "stat",
       "title": "Watching",
       "description": "",
@@ -512,7 +567,7 @@
       }
     },
     {
-      "id": 10,
+      "id": 11,
       "type": "row",
       "title": "The keeper's loop (one thread: when it falls behind, every answer waits)",
       "collapsed": false,
@@ -525,7 +580,7 @@
       "panels": []
     },
     {
-      "id": 11,
+      "id": 12,
       "type": "timeseries",
       "title": "Step time",
       "description": "How long one pass over every room takes. Requests wait up to this long.",
@@ -598,7 +653,7 @@
       }
     },
     {
-      "id": 12,
+      "id": 13,
       "type": "timeseries",
       "title": "Loop busy",
       "description": "Share of time the loop is working (1 = never idle), and how much of it is log writing or waiting for a connection to open. Busy with little CPU: it is waiting.",
@@ -680,7 +735,7 @@
       }
     },
     {
-      "id": 13,
+      "id": 14,
       "type": "timeseries",
       "title": "Answers and resends",
       "description": "Resends: answers not acknowledged within 250 ms (slow or lost links).",
@@ -762,10 +817,10 @@
       }
     },
     {
-      "id": 14,
+      "id": 15,
       "type": "timeseries",
       "title": "Server connects",
-      "description": "One per room and per table set's relay room. A firewall limit on them makes each wait (TCP retries).",
+      "description": "One per room and per table set's relay room, made on worker threads (the loop goes on meanwhile). A firewall limit on them makes each wait (TCP retries): waiting ones pile up and new rooms open late; one not through in 30 s fails.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -794,6 +849,15 @@
           },
           "expr": "rate(sfvr_keeper_connect_failures_total[1m]) * 60",
           "legendFormat": "failed per minute"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sfvr_keeper_connects_pending",
+          "legendFormat": "waiting now"
         }
       ],
       "fieldConfig": {
@@ -826,7 +890,7 @@
       }
     },
     {
-      "id": 15,
+      "id": 16,
       "type": "timeseries",
       "title": "Longest connect",
       "description": "",
@@ -881,7 +945,7 @@
       }
     },
     {
-      "id": 16,
+      "id": 17,
       "type": "timeseries",
       "title": "Requests by kind",
       "description": "Per minute.",
@@ -936,7 +1000,7 @@
       }
     },
     {
-      "id": 17,
+      "id": 18,
       "type": "row",
       "title": "Rooms and tables",
       "collapsed": false,
@@ -949,10 +1013,10 @@
       "panels": []
     },
     {
-      "id": 18,
+      "id": 19,
       "type": "timeseries",
       "title": "Members",
-      "description": "",
+      "description": "Online: players connected (server connections less the keeper's own and players' match and spectating connections). The hub alone is in no room, so it counts only there.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -970,11 +1034,29 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sfvr_keeper_lobby_members",
-          "legendFormat": "lobby"
+          "expr": "sfvr_keeper_players_online",
+          "legendFormat": "online"
         },
         {
           "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sfvr_keeper_server_connections",
+          "legendFormat": "server connections"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sfvr_keeper_lobby_members",
+          "legendFormat": "at the desk (rooms screen)"
+        },
+        {
+          "refId": "D",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -983,7 +1065,7 @@
           "legendFormat": "in rooms"
         },
         {
-          "refId": "C",
+          "refId": "E",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -1022,7 +1104,7 @@
       }
     },
     {
-      "id": 19,
+      "id": 20,
       "type": "timeseries",
       "title": "Rooms",
       "description": "",
@@ -1104,7 +1186,7 @@
       }
     },
     {
-      "id": 20,
+      "id": 21,
       "type": "timeseries",
       "title": "Tables by phase",
       "description": "",
@@ -1159,7 +1241,7 @@
       }
     },
     {
-      "id": 21,
+      "id": 22,
       "type": "timeseries",
       "title": "Sets ended (per 10 min)",
       "description": "result: back to the room; again: played on; forfeit: a player left; unfinished: called again.",
@@ -1214,7 +1296,7 @@
       }
     },
     {
-      "id": 22,
+      "id": 23,
       "type": "timeseries",
       "title": "Calls and tickets (per minute)",
       "description": "",
@@ -1287,7 +1369,7 @@
       }
     },
     {
-      "id": 23,
+      "id": 24,
       "type": "timeseries",
       "title": "Relays",
       "description": "",
@@ -1351,7 +1433,7 @@
       }
     },
     {
-      "id": 24,
+      "id": 25,
       "type": "timeseries",
       "title": "Trouble",
       "description": "",
@@ -1424,7 +1506,7 @@
       }
     },
     {
-      "id": 25,
+      "id": 26,
       "type": "timeseries",
       "title": "Containers: server and keeper",
       "description": "",
@@ -1479,7 +1561,7 @@
       }
     },
     {
-      "id": 26,
+      "id": 27,
       "type": "row",
       "title": "Rooms API (the publisher)",
       "collapsed": false,
@@ -1492,7 +1574,7 @@
       "panels": []
     },
     {
-      "id": 27,
+      "id": 28,
       "type": "stat",
       "title": "Last push",
       "description": "Seconds since the room list last reached the rooms API.",
@@ -1556,7 +1638,7 @@
       }
     },
     {
-      "id": 28,
+      "id": 29,
       "type": "stat",
       "title": "Failures (1 h)",
       "description": "",
@@ -1620,7 +1702,7 @@
       }
     },
     {
-      "id": 29,
+      "id": 30,
       "type": "timeseries",
       "title": "Pushes",
       "description": "",

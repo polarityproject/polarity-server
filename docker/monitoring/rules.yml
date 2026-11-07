@@ -15,7 +15,13 @@ groups:
         for: 2m
         labels: {severity: critical}
         annotations:
-          summary: The keeper does not host the lobby channel (players cannot make or find rooms).
+          summary: The keeper does not host the desk (the lobby channel) - players see custom rooms as offline and cannot make rooms.
+      - alert: ServerStatsStale
+        expr: sfvr_keeper_online_from_server == 0
+        for: 2m
+        labels: {severity: warning}
+        annotations:
+          summary: "The rooms server's stats file is missing or stale ({{ $labels.instance }}): players online counts only room members, not players on the hub (check the server container and the stats volume)."
       - alert: KeeperStepsSlow
         expr: sfvr_keeper_step_max_seconds > 0.25
         for: 2m

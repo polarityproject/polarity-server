@@ -249,8 +249,19 @@ private:
     void SaveState();
     std::vector<std::string> LoadState();
     int Count(const Room& room) const { return static_cast<int>(room.members.size()); }
+    // The rooms server's --stats file: its connection count, and how old the
+    // file is (-1: no file, or none asked for).
+    struct ServerStats {
+        long connections = -1;
+        double ageSeconds = -1;
+        bool Fresh() const { return connections >= 0 && ageSeconds >= 0 && ageSeconds <= 30; }
+    };
+    ServerStats ReadServerStats() const;
     // Players online from the server's connection count; -1 without a fresh one.
-    int OnlineFromServer() const;
+    int OnlineFromServer(const ServerStats& stats) const;
+    // Players online as StatusJson gives them (from the server, else the
+    // members of the keeper's rooms), and which it was.
+    int PlayersOnline(bool* fromServer) const;
 
     KeeperOptions o_;
     std::unique_ptr<Room> lobby_;

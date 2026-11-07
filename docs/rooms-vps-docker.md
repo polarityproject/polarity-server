@@ -297,8 +297,9 @@ over as in step 5.
 
 ### Alerts
 
-`monitoring/rules.yml`: the keeper not writing its metrics, the lobby
-down, slow or busy steps (the longest, and 1 in 100 over 50 ms), connects
+`monitoring/rules.yml`: the keeper not writing its metrics, the desk (the
+lobby channel) down, the server's stats file stale (players online would
+count only room members), slow or busy steps (the longest, and 1 in 100 over 50 ms), connects
 to the server backing up, log writing that blocks the loop, resends; CPU,
 memory and disk; a stack container down or restarting; the publisher failing.
 They show in Grafana (Alerting, Alert rules, under the Prometheus data

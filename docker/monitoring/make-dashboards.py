@@ -119,14 +119,18 @@ def service():
     b = Board("sfvr-rooms-service", "SFVR rooms service",
               "The keeper (tables, rooms, relays) and the rooms publisher, from the keeper's metrics file.")
     b.row("Now")
-    b.stat("Lobby", "sfvr_keeper_lobby_up", w=3, description="Whether the keeper hosts the lobby channel.",
+    b.stat("Desk", "sfvr_keeper_lobby_up", w=2,
+           description="Whether the keeper hosts the desk (the lobby channel): room requests go through it and its listing carries the public list's summary. Down: players see custom rooms as offline.",
            thresholds=[{"color": "red", "value": None}, {"color": "green", "value": 1}],
            mappings=[{"type": "value", "options": {"0": {"text": "DOWN"}, "1": {"text": "UP"}}}])
     b.stat("Metrics age", 'time() - node_textfile_mtime_seconds{file=~".*keeper.prom"}', unit="s", w=3,
            description="Seconds since the keeper last wrote its metrics (every 5 s; a stuck loop stops it).",
            thresholds=RED_AT(15, 60), decimals=0)
-    b.stat("In the lobby", "sfvr_keeper_lobby_members", w=3)
-    b.stat("Rooms", "sfvr_keeper_rooms", w=3)
+    b.stat("Online", "sfvr_keeper_players_online", w=3,
+           description="Players connected to the rooms server: on the hub, at the desk or in a room (the rooms API's online). From the server's connection count; if its stats file is stale, only room members (see Members).")
+    b.stat("At the desk", "sfvr_keeper_lobby_members", w=2,
+           description="Players with the custom rooms screen open (they join the desk to make rooms and see previews). The hub alone is in no room.")
+    b.stat("Rooms", "sfvr_keeper_rooms", w=2)
     b.stat("Public rooms", "sfvr_keeper_public_rooms", w=3)
     b.stat("In rooms", "sfvr_keeper_room_members", w=3)
     b.stat("Tables playing", 'sum(sfvr_keeper_tables{phase=~"connecting|playing"})', w=3)
@@ -153,17 +157,20 @@ def service():
     b.series("Server connects", [
         ("rate(sfvr_keeper_connects_total[1m]) * 60", "per minute"),
         ("rate(sfvr_keeper_connect_failures_total[1m]) * 60", "failed per minute"),
-    ], w=6, description="One per room and per table set's relay room. A firewall limit on them makes each wait (TCP retries).")
+        ("sfvr_keeper_connects_pending", "waiting now"),
+    ], w=6, description="One per room and per table set's relay room, made on worker threads (the loop goes on meanwhile). A firewall limit on them makes each wait (TCP retries): waiting ones pile up and new rooms open late; one not through in 30 s fails.")
     b.series("Longest connect", [("sfvr_keeper_connect_max_seconds", "in 5 s")], unit="s", w=6)
     b.series("Requests by kind", [("sum by (kind) (rate(sfvr_keeper_requests_total[1m]) * 60)", "{{kind}}")],
              unit="short", w=12, stack=True, description="Per minute.")
 
     b.row("Rooms and tables")
     b.series("Members", [
-        ("sfvr_keeper_lobby_members", "lobby"),
+        ("sfvr_keeper_players_online", "online"),
+        ("sfvr_keeper_server_connections", "server connections"),
+        ("sfvr_keeper_lobby_members", "at the desk (rooms screen)"),
         ("sfvr_keeper_room_members", "in rooms"),
         ("sfvr_keeper_queued", "queued at tables"),
-    ], w=8)
+    ], w=8, description="Online: players connected (server connections less the keeper's own and players' match and spectating connections). The hub alone is in no room, so it counts only there.")
     b.series("Rooms", [
         ("sfvr_keeper_rooms", "rooms"),
         ("sfvr_keeper_public_rooms", "public"),
