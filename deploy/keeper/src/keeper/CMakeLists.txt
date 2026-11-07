@@ -40,6 +40,12 @@ execute_process(COMMAND ${CMAKE_COMMAND} -DPATCH=${SFVR_ROOT}/third_party/weyvel
 if(NOT link_mux EQUAL 0)
   message(FATAL_ERROR "cannot apply third_party/weyvelength-link-mux.patch")
 endif()
+execute_process(COMMAND ${CMAKE_COMMAND} -DPATCH=${SFVR_ROOT}/third_party/weyvelength-decode-limit.patch
+                        -P ${SFVR_ROOT}/cmake/apply-patch.cmake
+                WORKING_DIRECTORY ${weyvelength_SOURCE_DIR} RESULT_VARIABLE decode_limit)
+if(NOT decode_limit EQUAL 0)
+  message(FATAL_ERROR "cannot apply third_party/weyvelength-decode-limit.patch")
+endif()
 
 set(NO_SERVER ON CACHE BOOL "" FORCE)
 set(NO_TESTS ON CACHE BOOL "" FORCE)

@@ -16,6 +16,13 @@ must match the mod's (see the README). Newest first; the format follows
 
 ### Fixed
 
+- The rooms server could be crashed by anyone who reached its port: a
+  malformed message of a few bytes claiming gigabytes made it allocate them
+  until the kernel killed it (three times on the rooms VPS, 2026-11-07).
+  `weyvelength-decode-limit.patch` (the same patch as the mod's) caps what
+  decoding one message may allocate; the Docker image and `install.sh` apply
+  it. The Docker stack also caps the server's memory at 512 MB and the
+  keeper's at 256 MB, so a fault there restarts only that container.
 - `sfvr-reports` counts its folders again before removing any for space, so
   reports deleted outside it no longer make it remove matches early.
 

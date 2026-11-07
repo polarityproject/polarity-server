@@ -12,7 +12,7 @@ NAME=sfvr-server
 # Keep in step with the mod repository's CMakeLists.txt (FetchContent
 # weyvelength): the server and the clients speak the protocol of the same
 # commit. The mod's patch (third_party/weyvelength.patch) only changes the
-# client.
+# client; weyvelength-decode-limit.patch (here) is applied to both.
 COMMIT=d4e25c7da7aab18ff82d60d275ea95f794bb2ec9
 REPO=https://github.com/HeatXD/Weyvelength.git
 HOME_DIR=/opt/$NAME
@@ -41,8 +41,12 @@ if [ ! -d "$SRC/.git" ]; then
 	git clone --quiet "$REPO" "$SRC"
 fi
 git -C "$SRC" fetch --quiet origin
-git -C "$SRC" checkout --quiet "$COMMIT"
+git -C "$SRC" checkout --quiet --force "$COMMIT"
 git -C "$SRC" submodule update --init --recursive --quiet
+# A cap on what decoding one message may allocate: without it a few bytes
+# claiming gigabytes run the server out of memory (the mod's copy is
+# third_party/weyvelength-decode-limit.patch).
+git -C "$SRC" apply "$HERE/weyvelength-decode-limit.patch"
 cmake -S "$SRC" -B "$SRC/build" -DCMAKE_BUILD_TYPE=Release -DWEYVELENGTH_BUILD_TESTS=OFF >/dev/null
 cmake --build "$SRC/build" --target Server -j "$(nproc)"
 

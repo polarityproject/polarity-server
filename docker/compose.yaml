@@ -39,6 +39,10 @@ services:
     volumes: ["ice:/data", "geoip:/geoip:ro", "stats:/stats"]
     ulimits:
       nofile: {soft: 65536, hard: 65536}
+    # A backstop: it runs in tens of MB. Past this only this container is
+    # restarted, never the machine's other services (the kernel's own
+    # out-of-memory kill took it at 3 GB before the decode limit).
+    mem_limit: 512m
 
   ice:
     <<: *hardened
@@ -60,6 +64,7 @@ services:
     <<: *hardened
     build: {context: .., dockerfile: docker/keeper.Dockerfile}
     image: sfvr-rooms/keeper:latest
+    mem_limit: 256m   # a backstop: it runs in tens of MB
     command:
       - --key
       - /run/secrets/keeper_key

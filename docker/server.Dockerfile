@@ -10,6 +10,8 @@ FROM ubuntu:24.04 AS build
 # image's own patch (weyvelength-geoip.patch) only the server: members'
 # countries from their addresses (--geoip, member data "@cc"; a member's
 # "nocc"=1 keeps theirs hidden), and its counts for the keeper (--stats).
+# deploy/weyvelength-decode-limit.patch (the mod's third_party copy) caps
+# what decoding one message may allocate, on both ends.
 ARG WEYVELENGTH_COMMIT=d4e25c7da7aab18ff82d60d275ea95f794bb2ec9
 RUN apt-get update \
  && apt-get install -y --no-install-recommends build-essential cmake git ca-certificates libmaxminddb-dev \
@@ -17,8 +19,8 @@ RUN apt-get update \
 RUN git clone --quiet https://github.com/HeatXD/Weyvelength.git /src \
  && git -C /src checkout --quiet "$WEYVELENGTH_COMMIT" \
  && git -C /src submodule update --init --recursive --quiet
-COPY docker/weyvelength-geoip.patch /tmp/
-RUN git -C /src apply /tmp/weyvelength-geoip.patch
+COPY docker/weyvelength-geoip.patch deploy/weyvelength-decode-limit.patch /tmp/
+RUN git -C /src apply /tmp/weyvelength-geoip.patch  && git -C /src apply /tmp/weyvelength-decode-limit.patch
 RUN cmake -S /src -B /src/build -DCMAKE_BUILD_TYPE=Release -DWEYVELENGTH_BUILD_TESTS=OFF >/dev/null \
  && cmake --build /src/build --target Server -j "$(nproc)"
 
