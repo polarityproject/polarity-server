@@ -255,16 +255,45 @@ bool ReadDetailPart(std::string_view text, int* part, int* parts, std::string* r
 // The parts, in order (all of them): the detail.
 bool JoinRoomDetail(const std::vector<std::string>& records, RoomDetail* out);
 
-// --- the name filter (public rooms) ---
-// A name the word list rejects shows as "Player N" in public rooms (user,
-// 2026-11-02). Compared folded: lower case, digits and symbols read as the
-// letters they stand for (0 o, 1 i, 3 e, 4 a, 5 s, 7 t, @ a, $ s), and
-// anything else that is not a letter dropped, so "B.a d" and "b4d" are "bad".
+// --- the word filter (public rooms: names and chat) ---
+// (docs/word-filter-plan.md) A name the word list rejects shows as "Player
+// 1234" in public rooms; a chat line has the words it rejects starred. Both
+// for the viewer, who may turn it off; the rooms API always masks names.
+// Compared folded: lower case, digits and symbols read as the letters they
+// stand for (0 o, 1 i, 3 e, 4 a, 5 s, 7 t, @ a, $ s), and anything else that
+// is not a letter dropped, so "B.a d" and "b4d" are "bad".
 std::string FoldName(std::string_view name);
-// `words` folded already (FoldName); empty words are ignored.
+// The list's entries: folded, a phrase's words joined by '_', and a trailing
+// '*' for "also any word starting with it" (chat). From a file: one entry a
+// line, blank lines and '#' comments skipped, entries that fold to nothing
+// dropped.
+std::vector<std::string> ParseWordFile(std::string_view text);
+// One entry as the file would have it ("Bad*" -> "bad*"); empty if it folds
+// to nothing.
+std::string WordEntry(std::string_view line);
+// A name: an entry of 5 letters or more anywhere in it (names run words
+// together: "xXbadwordXx"); a shorter one only as a whole word of the name
+// (split at what folding drops), so short entries do not catch ordinary
+// names that contain them.
 bool NameRejected(std::string_view name, const std::vector<std::string>& words);
-// Room data `mask`: the members whose names show as "Player N", with their
-// N (the keeper's count, so every client shows the same): "12=1,34=3".
+// A chat line with each rejected word's characters replaced by '*' (whole
+// UTF-8 characters, so it keeps its length on screen): a word, or a run of
+// up to six words in a row matching a phrase entry, whose folded form is an entry, or a word that
+// starts with a '*' entry. Words split at spaces and punctuation, so only
+// whole words match ("class" passes an entry that is part of it).
+std::string CensorChat(std::string_view text, const std::vector<std::string>& words);
+// The list in a public room's data, for the players' games: kWordListHash
+// (WordListHash) and the entries over wl0, wl1... (PackWordList: joined by
+// ',', 512 bytes a value at most, kWordListKeys values at most).
+constexpr const char* kWordListHash = "wlv";
+std::string WordListKey(int index); // "wl0"
+constexpr int kWordListKeys = 24;
+std::vector<std::string> PackWordList(const std::vector<std::string>& words);
+std::vector<std::string> UnpackWordList(const std::vector<std::string>& values);
+std::string WordListHash(const std::vector<std::string>& words);
+// Room data `mask`: the members whose names show as "Player <number>", with
+// their number (1000-9999, the keeper's pick, the same for every viewer):
+// "12=4821,34=1307".
 constexpr const char* kMask = "mask";
 std::string FormatMask(const std::map<uint32_t, int>& numbers);
 std::map<uint32_t, int> ParseMask(std::string_view text);

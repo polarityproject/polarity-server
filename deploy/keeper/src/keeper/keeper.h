@@ -44,8 +44,9 @@ struct KeeperOptions {
     // Every link on one UDP socket (in that range) instead of a port each:
     // a port per link ran out at about 100 links. Off: --per-link-ports.
     bool linkMux = true;
-    // The name filter's words (FoldName'd; --words <file>, one a line): a
-    // public room shows those names as "Player N".
+    // The word filter's list (ParseWordFile; --words <file>): a public room
+    // shows names it rejects as "Player 1234", and carries it in its room
+    // data for the players' games to star chat (docs/word-filter-plan.md).
     std::vector<std::string> words;
     // The rooms server's counts (its --stats file, every 5 s): players
     // browsing rooms are in no room, so the players online come from its
@@ -68,6 +69,9 @@ public:
     // For tests and status lines.
     std::string LobbyCode() const;
     size_t CustomRooms() const;
+    // The word list read again (--words, on SIGHUP): every public room's copy
+    // rewritten, its members' names checked again.
+    void SetWords(std::vector<std::string> words);
 
     // Observability (main.cpp writes both files every few seconds, --metrics
     // and --status). The keeper's counters and gauges in the Prometheus text
@@ -166,6 +170,7 @@ private:
         int64_t emptySinceMs = -1;
         bool closing = false;
         std::vector<uint32_t> masked; // members whose names the filter rejected (public rooms)
+        std::map<uint32_t, int> maskNumbers; // their "Player 1234" numbers (1000-9999, unique in the room)
         std::vector<Table> tables;
         bool unlisted = false; // the operator took it off the public list
         std::vector<std::unique_ptr<RelayLink>> relays;
@@ -212,6 +217,7 @@ private:
     int64_t commandsAtMs_ = 0;
     void CheckName(Room& room, uint32_t id);
     void WriteMask(Room& room);
+    void WriteWordList(Room& room); // a public room's wlv, wl0.. (the list for chat)
     std::string ShownName(const Room& room, uint32_t id) const;
     void Peek(Room& lobby, Member& m, const Request& request, int64_t nowMs);
     // Tables.

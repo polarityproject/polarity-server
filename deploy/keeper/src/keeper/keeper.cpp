@@ -505,7 +505,9 @@ void Keeper::SetUpAsHost(Room& room, int64_t nowMs)
         }
         if (room.owner) WriteData(room, kOwner, std::to_string(room.owner));
         weyve_set_room_joinable(c, Count(room) < kRoomCap);
+        WriteWordList(room);
         room.masked.clear();
+        room.maskNumbers.clear();
         for (uint32_t id : room.order) CheckName(room, id);
         WriteMask(room);
         SetUpTables(room, nowMs);
@@ -548,6 +550,7 @@ void Keeper::OnLeft(Room& room, uint32_t id, int64_t nowMs)
     if (room.kind != Kind::Custom) return;
     Log("keeper: room %s: %s (%u) left, %d members", room.code.c_str(), name.c_str(), id, Count(room));
     std::erase(room.masked, id);
+    room.maskNumbers.erase(id);
     WriteMask(room); // the others' places moved
     OffTables(room, id, nowMs);
     if (id == room.owner) {
@@ -1036,6 +1039,12 @@ void Keeper::CheckName(Room& room, uint32_t id)
     if (m == room.members.end() || !NameRejected(m->second.name, o_.words)) return;
     if (std::find(room.masked.begin(), room.masked.end(), id) != room.masked.end()) return;
     room.masked.push_back(id);
+    // "Player 1234": four random digits, none another masked member here has.
+    int n = 0;
+    do {
+        n = 1000 + static_cast<int>(rng_() % 9000);
+    } while (std::any_of(room.maskNumbers.begin(), room.maskNumbers.end(), [&](const auto& kv) { return kv.second == n; }));
+    room.maskNumbers[id] = n;
     Log("keeper: room %s: %u's name shows as %s here", room.code.c_str(), id, ShownName(room, id).c_str());
     WriteMask(room);
 }
@@ -1049,10 +1058,35 @@ void Keeper::WriteMask(Room& room)
     }
     std::map<uint32_t, int> numbers;
     for (uint32_t id : room.masked) {
-        const auto at = std::find(room.order.begin(), room.order.end(), id);
-        if (at != room.order.end()) numbers[id] = static_cast<int>(at - room.order.begin()) + 1;
+        const auto n = room.maskNumbers.find(id);
+        if (n != room.maskNumbers.end()) numbers[id] = n->second;
     }
     WriteData(room, kMask, FormatMask(numbers));
+}
+
+void Keeper::WriteWordList(Room& room)
+{
+    if (room.kind != Kind::Custom || !room.host) return;
+    const std::vector<std::string> values = room.settings.isPublic ? PackWordList(o_.words) : std::vector<std::string>{};
+    for (int i = 0; i < kWordListKeys; i++) {
+        if (i < static_cast<int>(values.size())) WriteData(room, WordListKey(i), values[i]);
+        else if (room.written.count(WordListKey(i))) DeleteData(room, WordListKey(i));
+    }
+    if (values.empty()) {
+        if (room.written.count(kWordListHash)) DeleteData(room, kWordListHash);
+    }
+    else WriteData(room, kWordListHash, WordListHash(o_.words));
+}
+
+void Keeper::SetWords(std::vector<std::string> words)
+{
+    o_.words = std::move(words);
+    Log("keeper: word list: %zu entries", o_.words.size());
+    for (auto& r : rooms_) {
+        if (r->closing || !r->inRoom) continue;
+        WriteWordList(*r);
+        for (uint32_t id : r->order) CheckName(*r, id);
+    }
 }
 
 std::string Keeper::ShownName(const Room& room, uint32_t id) const
@@ -1061,8 +1095,8 @@ std::string Keeper::ShownName(const Room& room, uint32_t id) const
     if (m == room.members.end()) return {};
     if (std::find(room.masked.begin(), room.masked.end(), id) == room.masked.end()) return m->second.name;
     // "Player N": N its place in the room (join order), as every client draws it.
-    const auto at = std::find(room.order.begin(), room.order.end(), id);
-    return "Player " + std::to_string(at - room.order.begin() + 1);
+    const auto n = room.maskNumbers.find(id);
+    return "Player " + std::to_string(n != room.maskNumbers.end() ? n->second : 0);
 }
 
 void Keeper::Peek(Room& lobby, Member& m, const Request& request, int64_t nowMs)
@@ -1462,13 +1496,12 @@ void Keeper::Commands(int64_t nowMs)
             Log("keeper: operator: %s %s%s", cmd.c_str(), arg.c_str(), found ? "" : " (no such room)");
         }
         else if (cmd == "word" && !arg.empty()) {
-            const std::string w = FoldName(arg);
-            if (w.size() >= 3) {
-                o_.words.push_back(w);
-                Log("keeper: operator: '%s' added to the name filter (%zu words)", w.c_str(), o_.words.size());
-                for (auto& r : rooms_) {
-                    for (uint32_t id : r->order) CheckName(*r, id);
-                }
+            const std::string w = WordEntry(arg);
+            if (!w.empty() && std::find(o_.words.begin(), o_.words.end(), w) == o_.words.end()) {
+                std::vector<std::string> words = o_.words;
+                words.push_back(w);
+                Log("keeper: operator: '%s' added to the word filter", w.c_str());
+                SetWords(std::move(words));
             }
         }
         else if (cmd == "rooms") {

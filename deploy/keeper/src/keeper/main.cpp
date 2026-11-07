@@ -38,6 +38,19 @@ uint64_t g_logLines = 0;
 double g_logSeconds = 0;
 
 void OnSignal(int) { g_stop = true; }
+std::atomic<bool> g_rereadWords{false};
+#ifdef SIGHUP
+void OnHangUp(int) { g_rereadWords = true; }
+#endif
+
+// The word filter's list (keeper_protocol ParseWordFile): one entry a line.
+std::vector<std::string> ReadWords(const std::string& path)
+{
+    std::ifstream in(path, std::ios::binary);
+    std::stringstream text;
+    text << in.rdbuf();
+    return ParseWordFile(text.str());
+}
 
 int64_t NowMs()
 {
@@ -116,7 +129,7 @@ int main(int argc, char** argv)
 {
     KeeperOptions o;
     o.protocol = sfv::lobby::kProtocol;
-    std::string keyPath, metricsPath, statusPath;
+    std::string keyPath, metricsPath, statusPath, wordsPath;
     for (int i = 1; i < argc; i++) {
         const std::string a = argv[i];
         const bool hasValue = i + 1 < argc;
@@ -124,12 +137,8 @@ int main(int argc, char** argv)
         if (a == "--key" && hasValue) keyPath = argv[++i];
         else if (a == "--state" && hasValue) o.statePath = argv[++i];
         else if (a == "--words" && hasValue) {
-            std::ifstream words(argv[++i]);
-            std::string line;
-            while (std::getline(words, line)) {
-                const std::string w = FoldName(line);
-                if (w.size() >= 3) o.words.push_back(w); // shorter ones would catch ordinary names
-            }
+            wordsPath = argv[++i];
+            o.words = ReadWords(wordsPath);
         }
         else if (a == "--protocol" && hasValue) o.protocol = static_cast<uint16_t>(std::atoi(argv[++i]));
         else if (a == "--ports" && hasValue) {
@@ -164,6 +173,10 @@ int main(int argc, char** argv)
     o.log = LogLine;
     std::signal(SIGINT, OnSignal);
     std::signal(SIGTERM, OnSignal);
+#ifdef SIGHUP
+    // The word list again (docker compose kill -s HUP keeper), without a restart.
+    std::signal(SIGHUP, OnHangUp);
+#endif
     LogLine("sfvr-keeper: lobby protocol " + std::to_string(o.protocol) + ", public key " + Hex(o.key.pub, 8) + "..., " +
             std::to_string(o.words.size()) + " filtered words");
 
@@ -172,6 +185,7 @@ int main(int argc, char** argv)
     const double startedUnix = std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count();
     int64_t filesAtMs = -1;
     while (!g_stop) {
+        if (g_rereadWords.exchange(false) && !wordsPath.empty()) keeper.SetWords(ReadWords(wordsPath));
         keeper.Step(NowMs());
         const int64_t nowMs = NowMs();
         if ((!metricsPath.empty() || !statusPath.empty()) && (filesAtMs < 0 || nowMs - filesAtMs >= 5000)) {

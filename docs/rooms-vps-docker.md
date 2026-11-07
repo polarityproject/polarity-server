@@ -155,7 +155,7 @@ Now run the two firewall scripts from step 3.
 sudo cp env.example .env
 sudo cp ../deploy/cloudflare.env.example cloudflare.env
 sudo chmod 0600 cloudflare.env
-sudo touch keeper-words.txt
+sudo cp keeper-words.default.txt keeper-words.txt
 ```
 
 - `.env`: the server's TCP port (5555) and the keeper's UDP range. If you
@@ -164,8 +164,11 @@ sudo touch keeper-words.txt
   (Cloudflare dashboard, Realtime, TURN). Without them players behind strict
   networks cannot connect (STUN only). Keep the file root-only: the token
   can mint relay credentials billed to the account.
-- `keeper-words.txt`: the public rooms' name filter, one word a line
-  (empty: no filter).
+- `keeper-words.txt`: the public rooms' word filter (names and chat), one
+  entry a line (empty: no filter). The default is the English list of
+  LDNOOBW ("List of Dirty, Naughty, Obscene, and Otherwise Bad Words", CC BY
+  4.0; its header has the credit and the format). Edit your copy; see
+  [Word filter](#word-filter).
 
 ## 7. Build
 
@@ -306,6 +309,32 @@ They show in Grafana (Alerting, Alert rules, under the Prometheus data
 source) and in Prometheus. Nothing is sent anywhere yet: a Grafana contact
 point (a Discord webhook, email) can be added when wanted.
 
+### Word filter
+
+The keeper reads `keeper-words.txt` (`--words`) at start. In public rooms:
+
+- A name the list rejects shows as `Player 1234` (four random digits, the
+  same for every player in the room, new in each room), in the room, the
+  room list, previews and the rooms API.
+- Each public room carries the list (room data `wl0`.. and its hash `wlv`),
+  and the game stars the listed words in chat as it shows them.
+- Players can turn the Word filter off in SFVR settings: they then see names
+  and chat in rooms as they are. The room list, previews and the rooms API
+  stay filtered. Private rooms are never filtered.
+
+After editing the file: `sudo docker compose kill -s HUP keeper` reads it
+again and rewrites every public room's copy (no restart, no room closed).
+The file is mounted into the container on its own, so edit it in place
+(`sudo nano`; an editor that saves a new file and renames it leaves the
+keeper on the old one until `sudo docker compose restart keeper`).
+For one word at once: `echo "word <word>" | sudo docker compose exec -T keeper
+tee /data/state.cmd` (also `word <word>*` for a prefix).
+
+Entries are folded (case, look-alike digits and symbols, everything else
+dropped); in chat they match whole words, `word*` any word starting with it,
+a phrase only its words in a row; in names an entry of 5 letters or more
+matches anywhere, a shorter one only as a whole word of the name.
+
 ### The keeper's numbers that matter
 
 - **Step time**: the keeper is one loop over every room. A request waits for
@@ -346,7 +375,7 @@ GET .../v1/summary
 
 - Only public rooms are listed (as the game lists them, without the game's
   limit of what fits its lobby data). Names are as the room shows them (the
-  name filter's `Player N`).
+  word filter's `Player 1234`, always, whatever a player's own setting).
 - `title`: the room's title, the English of the Street Fighter V Battle Lounge
   comment its owner picked (`null`: none; show something like "Owner's room").
   `title_id` is the comment's number in the game's table (0, 3, 5-18 are
