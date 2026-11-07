@@ -1,8 +1,9 @@
 # Custom rooms server on a fresh Ubuntu VPS, in Docker
 
-How to set up the server the rooms builds (0.3.0-rooms.N) use, on its own
-VPS until rooms ship to everyone. It runs three containers from
-`docker/compose.yaml`:
+How to set up SFVR's server in Docker: the server the rooms builds
+(0.3.0-rooms.N) use, and from 0.3.0 the one public server (user,
+2026-11-06: the rooms VPS takes over; only updates stay on the website). It
+runs these containers from `docker/compose.yaml`:
 
 | Container | What it does | Network |
 | --- | --- | --- |
@@ -10,8 +11,11 @@ VPS until rooms ship to everyone. It runs three containers from
 | `ice` | Fresh Cloudflare TURN credentials for it every 6 hours | outbound HTTPS only |
 | `geoip` | DB-IP's free IP-to-country database for it, every month: players' countries for the rooms API | outbound HTTPS only |
 | `keeper` | sfvr-keeper: custom rooms' tables, calls, rotation and moderation; a client of the server | UDP 47200–47299 (its peer-to-peer links) |
+| `reports` | sfvr-reports: the games' desync and crash reports, into the host's `/var/lib/sfvr-server/` ([Reports](#reports)) | TCP 5580 |
 
-Reports stay on the main VPS; nothing here receives them.
+Until 0.3.0 the rooms builds still send their reports to the main VPS (their
+`kDefaultReportUrl`); 0.3.0 sends them here, and [Moving to 0.3.0](#moving-to-030)
+lists the rest of the switch.
 
 Optional, beside them: the monitoring (`docker/compose.monitoring.yaml`,
 [Monitoring](#monitoring)): dashboards, logs and alerts for the VPS and the
@@ -88,6 +92,7 @@ and reboot by hand.)
 sudo ufw allow OpenSSH
 sudo ufw allow 5555/tcp comment sfvr-rooms
 sudo ufw allow 47200:47299/udp comment sfvr-keeper
+sudo ufw allow 5580/tcp comment sfvr-reports
 sudo ufw enable
 ```
 
@@ -156,10 +161,15 @@ sudo cp env.example .env
 sudo cp ../deploy/cloudflare.env.example cloudflare.env
 sudo chmod 0600 cloudflare.env
 sudo cp keeper-words.default.txt keeper-words.txt
+sudo install -d -o 10001 -g 10001 -m 0750 /var/lib/sfvr-server/reports /var/lib/sfvr-server/crashes
 ```
 
-- `.env`: the server's TCP port (5555) and the keeper's UDP range. If you
-  change either, change the firewall rules to match.
+- `.env`: the server's TCP port (5555), the keeper's UDP range and the
+  reports' port (5580) and limits. If you change a port, change the
+  firewall rules to match.
+- `/var/lib/sfvr-server/reports` and `crashes`: where the reports container
+  writes (host folders, so you read and copy them on the VPS itself), owned
+  by its user.
 - `cloudflare.env`: the Cloudflare Realtime TURN key id and API token
   (Cloudflare dashboard, Realtime, TURN). Without them players behind strict
   networks cannot connect (STUN only). Keep the file root-only: the token
@@ -433,6 +443,71 @@ without changing anything else.
 
 To change the secret: a new `secrets/rooms_push`, `npx wrangler secret put
 PUSH_SECRET` with it, `dc up -d --force-recreate publisher`.
+## Reports
+
+The `reports` container takes the games' desync and crash reports (the
+mod sends them unless the player turned it off: SFVR settings, Send
+reports) on TCP 5580 and files them in the host's folders:
+
+- `/var/lib/sfvr-server/reports/<match id>/` (both players' halves of a
+  desync side by side)
+- `/var/lib/sfvr-server/crashes/<date>/`
+
+Limits (`.env`): 16 MB a file, `REPORTS_PER_HOUR` files an hour from one
+address, and past `REPORTS_MAX_MB` / `CRASHES_MAX_MB` the oldest folders
+go. `dc logs reports` shows each one received; the `ReportsUnhealthy` and
+`ContainerDown` alerts cover it.
+
+To look at them: copy them off with `scp`, or pack them on the VPS (and
+clear what was packed) with the host's Python, as before:
+
+```bash
+sudo python3 /opt/sfvr-rooms/deploy/collect-reports.py --crashes --out ~
+```
+
+then `scp` the zip to your PC (sfv-rollback's `docs/reviewing-reports.md`
+for what to do with it). Without Python on the host, the image has it:
+
+```bash
+dc run --rm -v ~:/out --entrypoint python3 reports /usr/local/bin/collect-reports.py \
+  --reports-dir /reports --crashes-dir /crashes --crashes --out /out
+```
+
+## Moving to 0.3.0
+
+At 0.3.0 this VPS becomes SFVR's server: 0.3.0's defaults are this
+address for the rooms server (5555, and 443) and for reports (5580), and
+its built-in keeper key is this keeper's. Updates stay on the website.
+
+1. **A new keeper key**, made here and never copied off except to a backup
+   (the one in use since 2026-11-04 was a test key that also lives on a PC):
+   ```bash
+   sudo mv secrets/keeper.key secrets/keeper.key.test
+   sudo docker run --rm -v "$PWD/secrets:/out" sfvr-rooms/keeper:latest --new-key /out/keeper.key
+   sudo chmod 0400 secrets/keeper.key
+   dc up -d --force-recreate keeper
+   ```
+   Its public half (printed) goes into the mod's `kKeeperPublicKey`
+   (`src/mod/rooms_client.cpp`) before 0.3.0 is built. Rooms builds until
+   then need `[rooms] keeper_key=<the new public half>` in their ini.
+2. **The reports container** (above): the folders (step 6), ufw 5580, `dc up
+   -d --build reports`.
+3. **The reports already on the main VPS**, once, so nothing is lost:
+   ```bash
+   # on the main VPS
+   sudo tar -czf ~/main-reports.tgz -C /var/lib/sfvr-server reports crashes
+   # on your PC
+   scp polarityadmin@203.0.113.20:~/main-reports.tgz .
+   scp main-reports.tgz polarityadmin@203.0.113.10:~
+   # here
+   sudo tar -xzf ~/main-reports.tgz -C /var/lib/sfvr-server
+   sudo chown -R 10001:10001 /var/lib/sfvr-server/reports /var/lib/sfvr-server/crashes
+   ```
+4. **The main VPS stays up for 0.2.x** until players have updated: 0.2.x
+   builds keep playing and sending reports there (they only learn the new
+   address from 0.3.0). Collect its reports now and then until it is
+   switched off.
+
 ## Updating
 
 | What | How | Effect on players |
@@ -479,6 +554,17 @@ the dashboards show the same logs for 14 days ([Monitoring](#monitoring)).
   dashboard's steal and the keeper's CPU) or log writing.
 
 ## Tested
+
+2026-11-06, the reports container in Docker on a Windows PC (its folders on
+the PC): healthy (`/v1/health`, Docker's check, `sfvr_container_healthy` in
+Prometheus); a desync recording and its log filed under their match id; a
+name it does not take refused (400), a 17 MB file refused (413), past 120
+files an hour from one address refused (429); a real crash from the game
+(`crash thread`) sent at its next start, log and minidump filed under the
+day; `collect-reports.py` run in the container (the `dc run` form) packed
+the 237 files of 117 folders into one zip and cleared them. The host form
+(`sudo python3 ... collect-reports.py`) is the same script as before the
+stack, on the VPS's own Python.
 
 2026-11-06, players' countries (`weyvelength-geoip.patch`, `geoip`) in Docker on a
 Windows PC: the server built with libmaxminddb and the patch, `geoip` fetched

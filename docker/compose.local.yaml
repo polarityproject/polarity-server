@@ -14,3 +14,7 @@ services:
     network_mode: "service:server"
   keeper:
     network_mode: "service:server"
+  reports:
+    network_mode: bridge
+    ports:
+      - "${REPORTS_PORT:-5580}:${REPORTS_PORT:-5580}/tcp"

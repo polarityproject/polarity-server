@@ -80,11 +80,17 @@ groups:
         annotations:
           summary: "Only {{ $value | humanizePercentage }} of the VPS's disk is free."
       - alert: ContainerDown
-        expr: sfvr_container_up{service=~"server|ice|keeper"} == 0
+        expr: sfvr_container_up{service=~"server|ice|geoip|keeper|reports"} == 0
         for: 1m
         labels: {severity: critical}
         annotations:
           summary: "The {{ $labels.service }} container is not running."
+      - alert: ReportsUnhealthy
+        expr: sfvr_container_healthy{service="reports"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: "The reports service does not answer its health check: games' desync and crash reports are not received (they retry later)."
       - alert: ContainerRestarting
         expr: increase(sfvr_container_restarts[15m]) > 2
         labels: {severity: warning}

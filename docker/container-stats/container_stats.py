@@ -6,6 +6,7 @@
 # "failed to identify the read-write layer ID"). Standard library only.
 #
 #   sfvr_container_up{service,name}                  1 running, 0 not
+#   sfvr_container_healthy{service,name}             1 its health check passes, 0 not (those with one)
 #   sfvr_container_restarts{service,name}            Docker's restart count
 #   sfvr_container_cpu_seconds_total{service,name}   CPU used since it started
 #   sfvr_container_memory_bytes{service,name}        working set (usage less inactive files)
@@ -62,7 +63,7 @@ def collect():
         for labels, value in rows:
             lines.append(f'{name}{{service="{esc(labels[0])}",name="{esc(labels[1])}"}} {value}')
 
-    up, restarts, cpu, mem, limit, pids = [], [], [], [], [], []
+    up, restarts, cpu, mem, limit, pids, healthy = [], [], [], [], [], [], []
     ok = 1
     try:
         for c in api("/containers/json?all=true"):
@@ -75,7 +76,11 @@ def collect():
             running = c.get("State") == "running"
             up.append((key, 1 if running else 0))
             try:
-                restarts.append((key, api(f"/containers/{c['Id']}/json").get("RestartCount", 0)))
+                inspect = api(f"/containers/{c['Id']}/json")
+                restarts.append((key, inspect.get("RestartCount", 0)))
+                health = (inspect.get("State") or {}).get("Health")
+                if health:
+                    healthy.append((key, 1 if health.get("Status") == "healthy" else 0))
             except (OSError, ValueError):
                 pass
             if not running:
@@ -94,6 +99,7 @@ def collect():
         ok = 0
         print(time.strftime("%H:%M:%S ") + f"container-stats: {e}", flush=True)
     metric("sfvr_container_up", "gauge", "1 when the container is running.", up)
+    metric("sfvr_container_healthy", "gauge", "1 when the container's health check passes (only containers that have one).", healthy)
     metric("sfvr_container_restarts", "gauge", "Times Docker restarted the container.", restarts)
     metric("sfvr_container_cpu_seconds_total", "counter", "CPU time the container used since it started.", cpu)
     metric("sfvr_container_memory_bytes", "gauge", "Memory in use, less inactive file cache (the working set).", mem)

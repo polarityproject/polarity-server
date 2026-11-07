@@ -5,6 +5,8 @@
 #           countries on the public room lists; IP Geolocation by DB-IP)
 #   keeper  sfvr-keeper, the tables and moderation, a client of the server;
 #           its peer-to-peer links use UDP ${KEEPER_PORTS}
+#   reports sfvr-reports, the games' desync and crash reports, TCP
+#           ${REPORTS_PORT} (5580), into the host's /var/lib/sfvr-server
 # Run from this folder: docker compose up -d --build
 #
 # Host networking: Docker's published ports go around ufw, which holds the
@@ -85,6 +87,27 @@ services:
       - "stats:/stats:ro"
       - "./keeper-words.txt:/config/keeper-words.txt:ro"
     depends_on: [server]
+
+  reports:
+    <<: *hardened
+    build: {context: .., dockerfile: docker/reports.Dockerfile}
+    image: sfvr-rooms/reports:latest
+    environment:
+      SFVR_REPORTS_PORT: ${REPORTS_PORT:-5580}
+      SFVR_REPORTS_MAX_MB: ${REPORTS_MAX_MB:-4096}
+      SFVR_CRASHES_MAX_MB: ${CRASHES_MAX_MB:-1024}
+    command: [--per-hour, "${REPORTS_PER_HOUR:-120}"]
+    # The host's folders (owned by uid 10001, rooms-vps-docker.md step 6):
+    # read, copied and bundled there, as before the stack.
+    volumes:
+      - "/var/lib/sfvr-server/reports:/reports"
+      - "/var/lib/sfvr-server/crashes:/crashes"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/v1/health' % os.environ['SFVR_REPORTS_PORT'], timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
 secrets:
   # Made once with: docker compose run --rm --no-deps -v ./secrets:/out keeper --new-key /out/keeper.key
