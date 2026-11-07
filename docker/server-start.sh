@@ -11,6 +11,8 @@ fi
 # 6-character room codes: the mod's match codes. Members' countries from the
 # database the geoip container keeps in /geoip (reopened when it changes;
 # none until it is there). GEOIP_PRIVATE: a country for LAN addresses (tests).
-set -- --port "${SFVR_PORT:-5555}" --room-code-length 6 --ice-file "$ICE" --geoip /geoip/country.mmdb
+# Its connection count every 5 s for the keeper's players-online total
+# (players browsing rooms are in no room): /stats, shared read-only with it.
+set -- --port "${SFVR_PORT:-5555}" --room-code-length 6 --ice-file "$ICE" --geoip /geoip/country.mmdb --stats /stats/server.json
 if [ -n "${GEOIP_PRIVATE:-}" ]; then set -- "$@" --geoip-private "$GEOIP_PRIVATE"; fi
 exec /usr/local/bin/weyvelength-server "$@"

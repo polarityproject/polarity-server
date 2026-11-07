@@ -1,13 +1,15 @@
 // sfvr-keeper: see keeper.h.
 //
 //   sfvr-keeper --key <file> [--server host:port] [--state <file>] [--words <file>] [--ports A-B] [--per-link-ports] [--protocol N]
-//               [--metrics <file.prom>] [--status <file.json>]
+//               [--metrics <file.prom>] [--status <file.json>] [--server-stats <file.json>]
 //   sfvr-keeper --new-key <file>    writes a key, prints its public half
 //
 // Logs to stdout (the journal on the server). Every 5 s, when asked: its
 // metrics in the Prometheus text format (--metrics, for node_exporter's
 // textfile collector) and the public room list as JSON (--status, for the
 // rooms API), each written to a temporary file and renamed over the old.
+// --server-stats: the rooms server's own counts (its --stats), for the
+// players online in --status.
 
 #include "core/lobby.h"
 #include "keeper/keeper.h"
@@ -139,6 +141,7 @@ int main(int argc, char** argv)
         else if (a == "--per-link-ports") o.linkMux = false;
         else if (a == "--metrics" && hasValue) metricsPath = argv[++i];
         else if (a == "--status" && hasValue) statusPath = argv[++i];
+        else if (a == "--server-stats" && hasValue) o.serverStatsPath = argv[++i];
         else if (a == "--server" && hasValue) {
             std::string s = argv[++i];
             const size_t colon = s.rfind(':');

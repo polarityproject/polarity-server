@@ -21,9 +21,11 @@ Cloudflare, which sites and bots read.
 
 Each container runs as an unprivileged user (uid 10001) with a read-only
 filesystem, no Linux capabilities and no privilege escalation. What they
-keep lives in two Docker volumes: `ice` (the TURN credentials file) and
-`keeper` (the keeper's state: its lobby channel and rooms' tables, read back
-after a restart). The keeper's signing key is a file secret.
+keep lives in Docker volumes: `ice` (the TURN credentials file), `keeper`
+(the keeper's state: its desk and rooms' tables, read back after a restart),
+`geoip` (the country database) and `stats` (the server's connection count
+every 5 s, read by the keeper for the players online: players browsing
+rooms are in no room). The keeper's signing key is a file secret.
 
 They use the host's network (`network_mode: host`): ports that Docker
 publishes go around ufw, which holds the per-address connection limit and
@@ -296,7 +298,8 @@ over as in step 5.
 ### Alerts
 
 `monitoring/rules.yml`: the keeper not writing its metrics, the lobby
-down, slow or busy steps, log writing that blocks the loop, resends; CPU,
+down, slow or busy steps (the longest, and 1 in 100 over 50 ms), connects
+to the server backing up, log writing that blocks the loop, resends; CPU,
 memory and disk; a stack container down or restarting; the publisher failing.
 They show in Grafana (Alerting, Alert rules, under the Prometheus data
 source) and in Prometheus. Nothing is sent anywhere yet: a Grafana contact
@@ -309,6 +312,10 @@ point (a Discord webhook, email) can be added when wanted.
   2026-11-06 the VPS answered a new room after 57 s and a play-on request after
   10 s under bot load; the step time and the log-writing share say whether
   that is CPU, log writing or something else.
+- **Connects**: the keeper opens a connection to the server for each new
+  room and each set's spectator relay. They run on worker threads (since
+  2026-11-06), so a slow connect delays only that room;
+  `sfvr_keeper_connects_pending` and the connect seconds show them.
 - **Resends**: answers players did not acknowledge within 250 ms.
 - **UDP buffer full** (VPS dashboard): link packets dropped because the keeper
   did not read them in time.
@@ -357,8 +364,10 @@ GET .../v1/summary
 - **Attribution**: DB-IP's licence (CC BY 4.0) asks whoever shows the countries
   to credit them: the `attribution` line, or `IP Geolocation by DB-IP` with a
   link to https://db-ip.com, beside the flags on a page or in an embed.
-- The totals: `online`, every player connected (in the lobby or any room,
-  private ones too); `in_public_rooms`, the members of the listed rooms;
+- The totals: `online`, every player connected (on the hub, at the desk or
+  in any room, private ones too: the server's connection count, less the
+  keeper's own and players' second connections for a match or to watch one);
+  `in_public_rooms`, the members of the listed rooms;
   `public_rooms`, the listed rooms. Nothing else about private rooms.
 - `stale` is true when the list is over 60 s old: the VPS, the keeper or the
   publisher is down; a page should say so rather than show it as live.

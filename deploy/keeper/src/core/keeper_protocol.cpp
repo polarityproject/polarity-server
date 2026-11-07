@@ -52,33 +52,20 @@ std::string Clean(std::string_view text)
     return s;
 }
 
-std::string EncodeEntry(const ListedRoom& r)
+std::string Slot(const Listing& listing, const char* key)
 {
-    std::string faces;
-    for (size_t i = 0; i < r.faces.size() && i < 6; i++) {
-        if (i) faces += ',';
-        faces += Clean(r.faces[i]);
-    }
-    return Clean(r.code) + '\t' + FormatTitle(r.title) + '\t' + std::to_string(r.members) + '\t' +
-           std::to_string(r.tables) + '\t' + std::to_string(r.openSeats) + '\t' + Clean(r.rules) + '\t' + faces + '\t' +
-           Clean(r.owner) + '\t' + CleanCountry(r.ownerCountry);
+    const auto it = listing.find(key);
+    return it != listing.end() ? it->second : std::string();
 }
 
-bool DecodeEntry(std::string_view text, ListedRoom* out)
+// Cut to `max` bytes at a whole UTF-8 character.
+std::string CutUtf8(std::string s, size_t max)
 {
-    const auto f = Split(text, '\t');
-    if (f.size() != 9 || f[0].empty()) return false;
-    ListedRoom r;
-    r.code = std::string(f[0]);
-    if (!ParseTitle(f[1], &r.title) || !Int(f[2], &r.members) || !Int(f[3], &r.tables) || !Int(f[4], &r.openSeats)) return false;
-    r.rules = std::string(f[5]);
-    if (!f[6].empty()) {
-        for (std::string_view face : Split(f[6], ',')) r.faces.emplace_back(face);
-    }
-    r.owner = std::string(f[7]);
-    r.ownerCountry = CleanCountry(f[8]);
-    *out = std::move(r);
-    return true;
+    if (s.size() <= max) return s;
+    s.resize(max);
+    while (!s.empty() && (static_cast<unsigned char>(s.back()) & 0xC0) == 0x80) s.pop_back();
+    if (!s.empty() && (static_cast<unsigned char>(s.back()) & 0xC0) == 0xC0) s.pop_back();
+    return s;
 }
 
 } // namespace
@@ -93,7 +80,6 @@ std::string CleanCountry(std::string_view code)
 }
 
 std::string TableKey(int table) { return "t" + std::to_string(table); }
-std::string ListKey(int index) { return "pr" + std::to_string(index); }
 
 std::string ProofMessage(std::string_view room, uint32_t member)
 {
@@ -324,37 +310,74 @@ void SortRoomList(std::vector<ListedRoom>* rooms)
     });
 }
 
-std::vector<std::string> PackRoomList(const std::vector<ListedRoom>& rooms)
+std::string ListingKindValue(uint16_t protocol) { return "c" + std::to_string(protocol); }
+
+Listing RoomListing(const ListedRoom& r, uint16_t protocol)
 {
-    std::vector<std::string> values;
-    std::string current;
-    for (const ListedRoom& r : rooms) {
-        const std::string entry = EncodeEntry(r);
-        if (entry.size() > kMaxValue) continue; // cannot happen with names under 96 bytes
-        if (!current.empty() && current.size() + 1 + entry.size() > kMaxValue) {
-            values.push_back(std::move(current));
-            current.clear();
-            if (values.size() == kListKeys) return values;
-        }
-        if (!current.empty()) current += '\n';
-        current += entry;
+    std::string faces;
+    for (size_t i = 0; i < r.faces.size() && i < 6; i++) {
+        if (i) faces += ',';
+        faces += Clean(r.faces[i]);
     }
-    if (!current.empty()) values.push_back(std::move(current));
-    return values;
+    std::string rules = Clean(r.rules);
+    std::replace(rules.begin(), rules.end(), '|', ' ');
+    Listing l;
+    l[kListingKind] = ListingKindValue(protocol);
+    l[kListingRoom] = CutUtf8(FormatTitle(r.title) + '|' + std::to_string(r.members) + '|' + std::to_string(r.tables) + '|' +
+                                  std::to_string(r.openSeats) + '|' + rules + '|' + faces,
+                              kListingValueMax);
+    l[kListingOwner] = CutUtf8(CleanCountry(r.ownerCountry) + '|' + Clean(r.owner), kListingValueMax);
+    return l;
 }
 
-std::vector<ListedRoom> UnpackRoomList(const std::map<std::string, std::string>& data)
+std::string ListingMessage(std::string_view code, const Listing& l)
 {
-    std::vector<ListedRoom> rooms;
-    for (int i = 0; i < kListKeys; i++) {
-        const auto it = data.find(ListKey(i));
-        if (it == data.end()) continue;
-        for (std::string_view line : Split(it->second, '\n')) {
-            ListedRoom r;
-            if (DecodeEntry(line, &r)) rooms.push_back(std::move(r));
-        }
+    return "sfvr-list 1 " + std::string(code) + "\n" + Slot(l, kListingKind) + "\n" + Slot(l, kListingRoom) + "\n" +
+           Slot(l, kListingOwner);
+}
+
+bool ParseRoomListing(std::string_view code, const Listing& l, uint16_t protocol, ListedRoom* out)
+{
+    if (code.empty() || Slot(l, kListingKind) != ListingKindValue(protocol)) return false;
+    const std::string a = Slot(l, kListingRoom), o = Slot(l, kListingOwner);
+    const auto f = Split(a, '|');
+    const size_t bar = o.find('|');
+    if (f.size() != 6 || bar == std::string::npos) return false;
+    ListedRoom r;
+    r.code = std::string(code);
+    if (!ParseTitle(f[0], &r.title) || !Int(f[1], &r.members) || !Int(f[2], &r.tables) || !Int(f[3], &r.openSeats)) return false;
+    r.rules = std::string(f[4]);
+    if (!f[5].empty()) {
+        for (std::string_view face : Split(f[5], ',')) r.faces.emplace_back(face);
     }
-    return rooms;
+    r.ownerCountry = CleanCountry(std::string_view(o).substr(0, bar));
+    r.owner = o.substr(bar + 1);
+    *out = std::move(r);
+    return true;
+}
+
+std::string FormatDeskSummary(const DeskSummary& s)
+{
+    return std::to_string(s.rev) + "|" + std::to_string(s.publicRooms) + "|" + std::to_string(s.players);
+}
+
+bool ParseDeskSummary(std::string_view text, DeskSummary* out)
+{
+    const auto f = Split(text, '|');
+    if (f.size() != 3 || f[0].empty()) return false;
+    DeskSummary s;
+    for (char c : f[0]) {
+        if (c < '0' || c > '9') return false;
+        s.rev = s.rev * 10 + static_cast<uint64_t>(c - '0');
+    }
+    if (!Int(f[1], &s.publicRooms) || !Int(f[2], &s.players)) return false;
+    *out = s;
+    return true;
+}
+
+std::string DeskMessage(std::string_view code, const Listing& l)
+{
+    return "sfvr-desk 1 " + std::string(code) + "\n" + Slot(l, kBuild) + "\n" + Slot(l, kCount) + "\n" + Slot(l, kDeskSummary);
 }
 
 namespace {

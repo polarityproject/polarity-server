@@ -22,6 +22,18 @@ groups:
         labels: {severity: warning}
         annotations:
           summary: "A keeper step took {{ $value | humanizeDuration }}: answers, calls and tickets wait that long."
+      - alert: KeeperStepsP99Slow
+        expr: histogram_quantile(0.99, rate(sfvr_keeper_step_seconds_bucket[5m])) > 0.05
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "1 keeper step in 100 takes over {{ $value | humanizeDuration }} (they take a few ms): something on its loop blocks."
+      - alert: KeeperConnectsBackedUp
+        expr: sfvr_keeper_connects_pending > 8
+        for: 2m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $value }} keeper connects to the rooms server are waiting: new rooms and spectator relays open late or not at all."
       - alert: KeeperLoopBusy
         expr: rate(sfvr_keeper_step_seconds_sum[5m]) > 0.5
         for: 5m

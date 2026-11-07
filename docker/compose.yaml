@@ -34,7 +34,7 @@ services:
       SFVR_PORT: ${SFVR_PORT:-5555}
       # A country for LAN addresses: testing the stack on a PC only.
       GEOIP_PRIVATE: ${GEOIP_PRIVATE:-}
-    volumes: ["ice:/data", "geoip:/geoip:ro"]
+    volumes: ["ice:/data", "geoip:/geoip:ro", "stats:/stats"]
     ulimits:
       nofile: {soft: 65536, hard: 65536}
 
@@ -76,9 +76,13 @@ services:
       - /data/keeper.prom
       - --status
       - /data/status.json
+      # The server's connection count (players online, browsing included).
+      - --server-stats
+      - /stats/server.json
     secrets: [keeper_key]
     volumes:
       - "keeper:/data"
+      - "stats:/stats:ro"
       - "./keeper-words.txt:/config/keeper-words.txt:ro"
     depends_on: [server]
 
@@ -90,3 +94,4 @@ volumes:
   ice: {}
   keeper: {}
   geoip: {}
+  stats: {}

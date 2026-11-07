@@ -9,7 +9,7 @@ FROM ubuntu:24.04 AS build
 # protocol of the same commit. The mod's patches only change the client; this
 # image's own patch (weyvelength-geoip.patch) only the server: members'
 # countries from their addresses (--geoip, member data "@cc"; a member's
-# "nocc"=1 keeps theirs hidden).
+# "nocc"=1 keeps theirs hidden), and its counts for the keeper (--stats).
 ARG WEYVELENGTH_COMMIT=d4e25c7da7aab18ff82d60d275ea95f794bb2ec9
 RUN apt-get update \
  && apt-get install -y --no-install-recommends build-essential cmake git ca-certificates libmaxminddb-dev \
@@ -30,7 +30,7 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --system --uid 10001 --user-group --home-dir /data --shell /usr/sbin/nologin sfvr \
  && install -d -o 10001 -g 10001 -m 0750 /data \
- && install -d -o 10001 -g 10001 -m 0755 /geoip
+ && install -d -o 10001 -g 10001 -m 0755 /geoip /stats
 COPY --from=build /src/build/Server/Server /usr/local/bin/weyvelength-server
 COPY --from=build /src/docs/examples/mint-cloudflare-credentials.sh /usr/local/bin/
 COPY docker/server-start.sh docker/ice-loop.sh docker/geoip-loop.sh /usr/local/bin/

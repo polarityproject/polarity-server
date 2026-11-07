@@ -30,12 +30,12 @@
 namespace sfv::keeper {
 
 // --- keys ---
-// Listing slots and room data of a presence room.
-constexpr const char* kKind = "kind";     // "lobby" or "custom"
+// Listing slots and room data of a presence room (the desk, a custom room).
+constexpr const char* kKind = "kind";     // "lobby" (the desk) or "custom"
 constexpr const char* kKindLobby = "lobby";
 constexpr const char* kKindCustom = "custom";
 constexpr const char* kBuild = "build";   // the lobby protocol (lobby::kProtocol)
-constexpr const char* kCount = "count";   // members, the keeper not counted (lobby listing)
+constexpr const char* kCount = "count";   // members, the keeper not counted (desk listing)
 // Custom room data.
 constexpr const char* kOwner = "owner";   // the owner's member id
 constexpr const char* kTitle = "title";  // the room's title (FormatTitle)
@@ -43,19 +43,15 @@ constexpr const char* kPublic = "pub";    // "1" listed in the lobby, "0" by cod
 constexpr const char* kTables = "tables"; // 1..kMaxTables
 // t0..t7: each table's rules (FormatRules).
 std::string TableKey(int table);
-// Lobby room data: the public room list, pr0..pr15 (PackRoomList).
-std::string ListKey(int index);
 // Member data.
 constexpr const char* kProof = "kp";
 constexpr const char* kRequest = "rq";
 constexpr const char* kAck = "ak";
 
-constexpr int kLobbyCap = 250;  // members of a lobby channel
+constexpr int kLobbyCap = 250;  // members of a desk (the lobby channel)
 constexpr int kRoomCap = 16;    // members of a custom room
 constexpr int kMaxTables = 8;
 constexpr int kDefaultTables = 4;
-constexpr int kListKeys = 16;
-constexpr size_t kMaxValue = 512; // Weyvelength's room data value limit
 
 // --- proof ---
 // The signed text: "sfvr-keeper 1 <room code> <member id>".
@@ -154,12 +150,43 @@ struct ListedRoom {
 // Rooms with open seats first, then full tables with room to queue, then
 // full rooms; the most members first within each.
 void SortRoomList(std::vector<ListedRoom>* rooms);
-// The values for pr0..pr15: whole entries only, as many as fit in each
-// value; rooms past the 16th value are left out (reachable by code). Fewer
-// than kListKeys values when the list is short (clear the rest).
-std::vector<std::string> PackRoomList(const std::vector<ListedRoom>& rooms);
-// From a lobby's room data; entries that do not parse are skipped.
-std::vector<ListedRoom> UnpackRoomList(const std::map<std::string, std::string>& data);
+
+// --- the public list in the rooms server's room listing ---
+// (docs/room-listing-plan.md) Public custom rooms are listed by the rooms
+// server itself: anyone connected lists them (ListRooms) without joining a
+// room. The keeper, as each room's host, sets four listing slots:
+constexpr const char* kListingKind = "k";  // "c<protocol>": what players filter on
+constexpr const char* kListingRoom = "a";  // "<title>|<members>|<tables>|<open seats>|<rules>|<faces>"
+constexpr const char* kListingOwner = "o"; // "<country>|<owner's name>"
+constexpr const char* kListingSig = "s";   // the keeper's signature (base64) of ListingMessage
+// The desk (the lobby channel, joined only to ask the keeper for something)
+// is listed with kKind "lobby", kBuild, kCount and these two:
+constexpr const char* kDeskSummary = "r";  // FormatDeskSummary
+// (kListingSig: the signature of DeskMessage). Players poll the desk's
+// listing and list the rooms again only when its revision moves.
+constexpr size_t kListingValueMax = 128;   // Weyvelength's listing value limit
+using Listing = std::map<std::string, std::string>;
+std::string ListingKindValue(uint16_t protocol); // "c16"
+// A public room's slots, its signature left out: k, a and o (o's name cut
+// to fit 128 bytes).
+Listing RoomListing(const ListedRoom& room, uint16_t protocol);
+// What the keeper signs for a room: "sfvr-list 1 <code>\n<k>\n<a>\n<o>".
+std::string ListingMessage(std::string_view code, const Listing& listing);
+// A listed room's slots (players check kListingSig apart): false if it is
+// not a custom room of this protocol or they do not parse.
+bool ParseRoomListing(std::string_view code, const Listing& listing, uint16_t protocol, ListedRoom* out);
+// The desk's summary: its revision (up whenever a public room's listing
+// changes), the public rooms and the players in them.
+struct DeskSummary {
+    uint64_t rev = 0;
+    int publicRooms = 0;
+    int players = 0;
+    bool operator==(const DeskSummary&) const = default;
+};
+std::string FormatDeskSummary(const DeskSummary& summary); // "<rev>|<rooms>|<players>"
+bool ParseDeskSummary(std::string_view text, DeskSummary* out);
+// What the keeper signs for a desk: "sfvr-desk 1 <code>\n<build>\n<count>\n<r>".
+std::string DeskMessage(std::string_view code, const Listing& listing);
 
 // The rooms API's document (the keeper's --status file, which sfvr-server's
 // rooms publisher sends on): the public list as the lobby shows it, and three
