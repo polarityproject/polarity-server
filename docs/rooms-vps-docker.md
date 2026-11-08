@@ -161,6 +161,8 @@ sudo cp env.example .env
 sudo cp ../deploy/cloudflare.env.example cloudflare.env
 sudo chmod 0600 cloudflare.env
 sudo cp keeper-words.default.txt keeper-words.txt
+sudo groupadd --system --gid 10001 sfvr-reports
+sudo usermod -aG sfvr-reports polarityadmin
 sudo install -d -o 10001 -g 10001 -m 0750 /var/lib/sfvr-server/reports /var/lib/sfvr-server/crashes
 ```
 
@@ -169,7 +171,10 @@ sudo install -d -o 10001 -g 10001 -m 0750 /var/lib/sfvr-server/reports /var/lib/
   firewall rules to match.
 - `/var/lib/sfvr-server/reports` and `crashes`: where the reports container
   writes (host folders, so you read and copy them on the VPS itself), owned
-  by its user.
+  by its user (uid 10001). The `sfvr-reports` group has the same id, so the
+  admin user in it can read and `scp` them without sudo (log in again after
+  `usermod` for the group to apply). If `groupadd` says the id is taken,
+  `getent group 10001` names the group to add the admin user to instead.
 - `cloudflare.env`: the Cloudflare Realtime TURN key id and API token
   (Cloudflare dashboard, Realtime, TURN). Without them players behind strict
   networks cannot connect (STUN only). Keep the file root-only: the token
@@ -460,8 +465,16 @@ address, and past `REPORTS_MAX_MB` / `CRASHES_MAX_MB` the oldest folders
 go. `dc logs reports` shows each one received; the `ReportsUnhealthy` and
 `ContainerDown` alerts cover it.
 
-To look at them: copy them off with `scp`, or pack them on the VPS (and
-clear what was packed) with the host's Python, as before:
+To look at them: copy them off with `scp` as the admin user (it reads them
+through the `sfvr-reports` group, step 6):
+
+```bash
+scp -r polarityadmin@203.0.113.10:/var/lib/sfvr-server/reports/<match id> .
+scp -r polarityadmin@203.0.113.10:/var/lib/sfvr-server/crashes/<date> .
+```
+
+or pack them on the VPS (and clear what was packed, so this one needs sudo)
+with the host's Python, as before:
 
 ```bash
 sudo python3 /opt/sfvr-rooms/deploy/collect-reports.py --crashes --out ~
