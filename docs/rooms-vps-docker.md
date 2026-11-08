@@ -365,6 +365,8 @@ matches anywhere, a shorter one only as a whole word of the name.
 The public room list for sites, Discord bots and stream overlays, served by
 a Cloudflare Worker (`cloudflare/rooms-api`). The VPS pushes the list to it
 (the `publisher`), so readers never reach the VPS and need no address of it.
+The full specification for tool builders (every field, errors, caching,
+reference tables) is `docs/rooms-api.md`; this section is about running it.
 
 ```
 GET https://sfvr-rooms-api.<your account>.workers.dev/v1/rooms

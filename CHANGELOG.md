@@ -9,6 +9,18 @@ must match the mod's (see the README). Newest first; the format follows
 
 ### Added
 
+- `docs/rooms-api.md`: the rooms API's specification for tool builders
+  (endpoints, every field, errors, caching and polling, title, character
+  and rules tables).
+- The rooms API's rooms carry `sfvr_version`, the SFVR version each room
+  plays.
+
+### Changed
+
+- A table's call lasts 21 s (20 on the your-turn card), 26 after a set that
+  broke off: a player called while watching another table first leaves
+  that match.
+
 - Rooms per SFVR version: a room takes its maker's version (member data
   `ver`), writes it as room data and lists under `c<protocol>/<version>`;
   the desk summary counts rooms and players per version. Deploy this

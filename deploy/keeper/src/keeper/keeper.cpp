@@ -58,8 +58,11 @@ constexpr int64_t kEmptyCloseMs = 3000;
 constexpr int64_t kListEveryMs = 2000;    // the public list and the lobby's count, at most this often
 constexpr int64_t kRoomAskEveryMs = 10000;
 constexpr int64_t kPeekEveryMs = 500;
-constexpr int kCallSeconds = 10;         // the your-turn card's 8 s, and a little for the trip
-constexpr int kBrokeOffCallSeconds = 15; // after a set that broke off: its players are still leaving the battle
+// The your-turn card shows a call's time less 1.5 s (the trip): 20 s to ready
+// (user, 2026-11-07: a player called while watching another table leaves
+// that match first, and the call's time runs meanwhile).
+constexpr int kCallSeconds = 21;
+constexpr int kBrokeOffCallSeconds = 26; // after a set that broke off: its players are still leaving the battle
 constexpr int64_t kConnectMs = 45000;    // P1 opens the match room and says its code
 constexpr int64_t kAfterMs = 5000;       // the after-set panels, then the rotation
 constexpr int64_t kConnectWaitMs = 30000; // a connect not over by then counts as failed

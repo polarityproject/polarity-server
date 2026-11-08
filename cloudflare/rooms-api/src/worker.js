@@ -8,14 +8,15 @@
 //   GET  /v1/summary  {version, updated, age, stale, totals: {online, in_public_rooms, public_rooms}}
 //   GET  /v1/health   "ok"
 //
-// A room: {code, title, title_id, title_characters, owner, members,
+// A room: {code, title, title_id, title_characters, owner, sfvr_version, members,
 // capacity, tables, open_seats, rules, faces, players: [{name, country,
 // face}]}. 	itle: the English of SFV's Battle Lounge comment the owner
 // picked (null: none, show the owner's name). country is the rooms
 // server's lookup of the player's address in DB-IP's free database (null
 // when unknown); whoever shows it credits DB-IP (ttribution, CC BY 4.0). `stale`: the list is older than 60 s (the VPS, the keeper
 // or the publisher is down); readers should say so rather than show it as
-// live. Any site may read it (CORS *); answers are cached 10 s.
+// live. Any site may read it (CORS *); answers are cached 10 s. The full
+// specification: docs/rooms-api.md.
 
 const OBJECT = "status.json";
 const MAX_BYTES = 512 * 1024;

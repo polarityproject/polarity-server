@@ -222,7 +222,7 @@ struct RoomTotals {
 };
 // {"version":1,"updated":<unix ms>,"totals":{"online":..,"in_public_rooms":..,
 // "public_rooms":..},"rooms":[{"code":..,
-// "title":"Beginners Welcome!"|null,"title_id":10,"title_characters":[..],"owner":..,
+// "title":"Beginners Welcome!"|null,"title_id":10,"title_characters":[..],"owner":..,"sfvr_version":"0.3.0"|null,
 // "members":..,"capacity":16,"tables":..,
 // "open_seats":..,"rules":..,"faces":[..],"players":[{"name":..,"country":"DE"|null,
 // "face":"RYU"|null}]}]}; strings escaped for JSON.

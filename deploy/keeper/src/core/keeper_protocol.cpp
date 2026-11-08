@@ -488,6 +488,11 @@ std::string FormatRoomListJson(const std::vector<ListedRoom>& rooms, const RoomT
         out += "]";
         out += ",\"owner\":";
         JsonString(out, r.owner);
+        // The room's SFVR version (players list and join only their own's);
+        // null from a keeper before versions.
+        out += ",\"sfvr_version\":";
+        if (r.version.empty()) out += "null";
+        else JsonString(out, r.version);
         out += ",\"members\":" + std::to_string(r.members) + ",\"capacity\":" + std::to_string(kRoomCap) +
                ",\"tables\":" + std::to_string(r.tables) + ",\"open_seats\":" + std::to_string(r.openSeats) + ",\"rules\":";
         JsonString(out, r.rules);
