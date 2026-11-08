@@ -9,6 +9,11 @@ must match the mod's (see the README). Newest first; the format follows
 
 ### Added
 
+- The keeper logs more of each table: a player readying (and both ready),
+  the match room P1 opens with its build, game scores, and any table
+  request it ignores (a phase the table has left or a seat the player does
+  not hold), so a stuck or refused table shows why.
+
 - `deploy/collect-reports.py` (installed in `/opt/sfvr-server/bin`): packs
   the desync reports received so far (`--crashes`: the crash reports too)
   into one zip laid out like the game's `reports` folder, then deletes them

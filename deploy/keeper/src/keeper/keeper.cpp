@@ -1293,9 +1293,12 @@ void Keeper::TableRequest(Room& room, Member& m, const Request& r, int64_t nowMs
     }
     else if (r.kind == "ready" && t && t->s.phase == TablePhase::Call) {
         const int seat = seatOf(*t);
+        if (seat < 0) Log("keeper: room %s: %s (%u) readies at table %d but is not seated there; ignored", room.code.c_str(), m.name.c_str(), m.id, index + 1);
         if (seat >= 0) {
             t->s.ready[seat] = true;
             m.callStrikes = 0;
+            Log("keeper: room %s: table %d: %s (%u) is ready as P%d%s", room.code.c_str(), index + 1, m.name.c_str(), m.id, seat + 1,
+                t->s.ready[0] && t->s.ready[1] ? ": both ready, P1 opens the match room" : "");
             if (t->s.ready[0] && t->s.ready[1]) {
                 // P1 hosts the match room; P2's ticket goes once it is open.
                 t->token = rng_() | 1;
@@ -1314,6 +1317,8 @@ void Keeper::TableRequest(Room& room, Member& m, const Request& r, int64_t nowMs
              seatOf(*t) == 0) {
         t->s.code = r.args[1];
         t->build = r.args.size() == 3 ? r.args[2] : std::string();
+        Log("keeper: room %s: table %d: P1 opened match room %s (build %s); P2's ticket goes", room.code.c_str(), index + 1, t->s.code.c_str(),
+            t->build.empty() ? "-" : t->build.c_str());
         t->s.watch.clear();
         SetPhase(*t, TablePhase::Playing, nowMs);
         Ticket(room, t->s.seat[1], {false, index, t->s.code, t->token, FormatRules(t->setRules)}, nowMs);
@@ -1327,6 +1332,8 @@ void Keeper::TableRequest(Room& room, Member& m, const Request& r, int64_t nowMs
             const uint8_t games[2] = {static_cast<uint8_t>(std::clamp(std::atoi(r.args[1].c_str()), 0, 99)),
                                       static_cast<uint8_t>(std::clamp(std::atoi(r.args[2].c_str()), 0, 99))};
             if (r.kind == "score") {
+                if (t->s.wins[0] != games[0] || t->s.wins[1] != games[1])
+                    Log("keeper: room %s: table %d: games %d-%d", room.code.c_str(), index + 1, games[0], games[1]);
                 t->s.wins[0] = games[0];
                 t->s.wins[1] = games[1];
             }
@@ -1426,6 +1433,12 @@ void Keeper::TableRequest(Room& room, Member& m, const Request& r, int64_t nowMs
             // Barred until they reconnect (Weyvelength's ban holds the connection).
             weyve_ban_member(room.client, id);
         }
+    }
+    else {
+        // Nothing matched: a request for a phase the table has left, a seat
+        // it does not hold, or a table that is not there (races show here).
+        Log("keeper: room %s: %s (%u) asks %s; ignored (table %d is %s)", room.code.c_str(), m.name.c_str(), m.id, FormatRequest(r).c_str(),
+            index + 1, t ? FormatTable(t->s).c_str() : "not there");
     }
     WriteTables(room);
 }
