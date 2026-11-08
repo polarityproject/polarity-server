@@ -95,6 +95,7 @@ private:
         bool removed = false; // kicked: what they sent before going is not acted on
         std::string chara;         // member data `ch`, for the list's faces
         std::string country;       // member data `@cc`, set by the rooms server from the address: for the rooms API
+        std::string version;       // member data `ver`: their SFVR version
     };
     struct Outgoing {
         uint32_t to = 0;
@@ -162,6 +163,7 @@ private:
         int64_t reconnectMs = 0;
         // Custom rooms.
         RoomSettings settings;
+        std::string version; // its maker's SFVR version (room data `ver`): its players' too
         uint32_t owner = 0;
         bool ownerArrived = false;
         uint32_t requester = 0;  // the lobby member who asked (answered once the code is known)

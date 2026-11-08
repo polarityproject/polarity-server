@@ -9,6 +9,13 @@ must match the mod's (see the README). Newest first; the format follows
 
 ### Added
 
+- Rooms per SFVR version: a room takes its maker's version (member data
+  `ver`), writes it as room data and lists under `c<protocol>/<version>`;
+  the desk summary counts rooms and players per version. Deploy this
+  before SFVR 0.3.0 goes out: 0.3.0 lists only rooms of its own version.
+- The keeper logs table requests it drops from members it has not seen
+  join yet, or while a room is paused.
+
 - The keeper logs more of each table: a player readying (and both ready),
   the match room P1 opens with its build, game scores, and any table
   request it ignores (a phase the table has left or a seat the player does

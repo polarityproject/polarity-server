@@ -35,6 +35,11 @@ constexpr const char* kKind = "kind";     // "lobby" (the desk) or "custom"
 constexpr const char* kKindLobby = "lobby";
 constexpr const char* kKindCustom = "custom";
 constexpr const char* kBuild = "build";   // the lobby protocol (lobby::kProtocol)
+// Member data: the player's SFVR version ("0.3.0"); room data: the room's,
+// its maker's. Players join only rooms of their own version (the netplay
+// check refuses other builds' matches anyway, after a whole handoff).
+constexpr const char* kVersion = "ver";
+constexpr size_t kVersionMax = 32;
 constexpr const char* kCount = "count";   // members, the keeper not counted (desk listing)
 // Custom room data.
 constexpr const char* kOwner = "owner";   // the owner's member id
@@ -136,6 +141,7 @@ struct ListedRoom {
     int openSeats = 0;       // seats nobody sits in, over all tables
     std::string rules;       // the first table's (FormatRules)
     std::vector<std::string> faces; // up to six character codes of members
+    std::string version;     // the room's SFVR version ("" from a keeper before versions)
     // Every member, in join order, for the rooms API only (FormatRoomListJson;
     // the lobby's keys have no room for them).
     struct Player {
@@ -155,7 +161,7 @@ void SortRoomList(std::vector<ListedRoom>* rooms);
 // (docs/room-listing-plan.md) Public custom rooms are listed by the rooms
 // server itself: anyone connected lists them (ListRooms) without joining a
 // room. The keeper, as each room's host, sets four listing slots:
-constexpr const char* kListingKind = "k";  // "c<protocol>": what players filter on
+constexpr const char* kListingKind = "k";  // "c<protocol>/<version>": what players filter on
 constexpr const char* kListingRoom = "a";  // "<title>|<members>|<tables>|<open seats>|<rules>|<faces>"
 constexpr const char* kListingOwner = "o"; // "<country>|<owner's name>"
 constexpr const char* kListingSig = "s";   // the keeper's signature (base64) of ListingMessage
@@ -166,14 +172,17 @@ constexpr const char* kDeskSummary = "r";  // FormatDeskSummary
 // listing and list the rooms again only when its revision moves.
 constexpr size_t kListingValueMax = 128;   // Weyvelength's listing value limit
 using Listing = std::map<std::string, std::string>;
-std::string ListingKindValue(uint16_t protocol); // "c16"
+// "c16/0.3.0": players list only their own protocol's and version's rooms
+// ("c16" for a room of no known version).
+std::string ListingKindValue(uint16_t protocol, std::string_view version = {});
 // A public room's slots, its signature left out: k, a and o (o's name cut
 // to fit 128 bytes).
 Listing RoomListing(const ListedRoom& room, uint16_t protocol);
 // What the keeper signs for a room: "sfvr-list 1 <code>\n<k>\n<a>\n<o>".
 std::string ListingMessage(std::string_view code, const Listing& listing);
 // A listed room's slots (players check kListingSig apart): false if it is
-// not a custom room of this protocol or they do not parse.
+// not a custom room of this protocol or they do not parse. Its version is
+// the kind's, whatever it is: players filter on it.
 bool ParseRoomListing(std::string_view code, const Listing& listing, uint16_t protocol, ListedRoom* out);
 // The desk's summary: its revision (up whenever a public room's listing
 // changes), the public rooms and the players in them.
@@ -181,9 +190,23 @@ struct DeskSummary {
     uint64_t rev = 0;
     int publicRooms = 0;
     int players = 0;
+    // The same per SFVR version (players see their own version's: they list
+    // only its rooms). The desk's listing has no slot left (Weyvelength
+    // allows 5), so they ride in this one, cut to fit its 128 bytes.
+    struct Version {
+        std::string version;
+        int publicRooms = 0;
+        int players = 0;
+        bool operator==(const Version&) const = default;
+    };
+    std::vector<Version> versions;
     bool operator==(const DeskSummary&) const = default;
+    // A version's counts: its own if listed, else none (or the totals when
+    // the desk lists no versions: a keeper before them).
+    DeskSummary For(std::string_view version) const;
 };
-std::string FormatDeskSummary(const DeskSummary& summary); // "<rev>|<rooms>|<players>"
+// "<rev>|<rooms>|<players>[|<version>:<rooms>:<players>,...]"
+std::string FormatDeskSummary(const DeskSummary& summary);
 bool ParseDeskSummary(std::string_view text, DeskSummary* out);
 // What the keeper signs for a desk: "sfvr-desk 1 <code>\n<build>\n<count>\n<r>".
 std::string DeskMessage(std::string_view code, const Listing& listing);

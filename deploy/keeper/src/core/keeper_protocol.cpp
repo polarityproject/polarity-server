@@ -311,7 +311,12 @@ void SortRoomList(std::vector<ListedRoom>* rooms)
     });
 }
 
-std::string ListingKindValue(uint16_t protocol) { return "c" + std::to_string(protocol); }
+std::string ListingKindValue(uint16_t protocol, std::string_view version)
+{
+    std::string kind = "c" + std::to_string(protocol);
+    if (!version.empty()) kind += "/" + Clean(std::string(version.substr(0, kVersionMax)));
+    return kind;
+}
 
 Listing RoomListing(const ListedRoom& r, uint16_t protocol)
 {
@@ -323,7 +328,7 @@ Listing RoomListing(const ListedRoom& r, uint16_t protocol)
     std::string rules = Clean(r.rules);
     std::replace(rules.begin(), rules.end(), '|', ' ');
     Listing l;
-    l[kListingKind] = ListingKindValue(protocol);
+    l[kListingKind] = ListingKindValue(protocol, r.version);
     l[kListingRoom] = CutUtf8(FormatTitle(r.title) + '|' + std::to_string(r.members) + '|' + std::to_string(r.tables) + '|' +
                                   std::to_string(r.openSeats) + '|' + rules + '|' + faces,
                               kListingValueMax);
@@ -339,7 +344,8 @@ std::string ListingMessage(std::string_view code, const Listing& l)
 
 bool ParseRoomListing(std::string_view code, const Listing& l, uint16_t protocol, ListedRoom* out)
 {
-    if (code.empty() || Slot(l, kListingKind) != ListingKindValue(protocol)) return false;
+    const std::string kind = Slot(l, kListingKind), plain = ListingKindValue(protocol);
+    if (code.empty() || (kind != plain && kind.rfind(plain + "/", 0) != 0)) return false;
     const std::string a = Slot(l, kListingRoom), o = Slot(l, kListingOwner);
     const auto f = Split(a, '|');
     const size_t bar = o.find('|');
@@ -351,6 +357,7 @@ bool ParseRoomListing(std::string_view code, const Listing& l, uint16_t protocol
     if (!f[5].empty()) {
         for (std::string_view face : Split(f[5], ',')) r.faces.emplace_back(face);
     }
+    r.version = kind.size() > plain.size() ? kind.substr(plain.size() + 1) : std::string();
     r.ownerCountry = CleanCountry(std::string_view(o).substr(0, bar));
     r.owner = o.substr(bar + 1);
     *out = std::move(r);
@@ -359,19 +366,53 @@ bool ParseRoomListing(std::string_view code, const Listing& l, uint16_t protocol
 
 std::string FormatDeskSummary(const DeskSummary& s)
 {
-    return std::to_string(s.rev) + "|" + std::to_string(s.publicRooms) + "|" + std::to_string(s.players);
+    std::string out = std::to_string(s.rev) + "|" + std::to_string(s.publicRooms) + "|" + std::to_string(s.players);
+    std::string versions;
+    for (const DeskSummary::Version& v : s.versions) {
+        std::string name = Clean(v.version);
+        std::erase_if(name, [](char c) { return c == ',' || c == ':' || c == '|'; });
+        if (name.empty()) continue;
+        const std::string entry = name + ":" + std::to_string(v.publicRooms) + ":" + std::to_string(v.players);
+        if (out.size() + 1 + versions.size() + 1 + entry.size() > kListingValueMax) break;
+        versions += (versions.empty() ? "" : ",") + entry;
+    }
+    if (!versions.empty()) out += "|" + versions;
+    return out;
+}
+
+DeskSummary DeskSummary::For(std::string_view version) const
+{
+    if (versions.empty()) return *this;
+    DeskSummary mine;
+    mine.rev = rev;
+    for (const Version& v : versions) {
+        if (v.version == version) {
+            mine.publicRooms = v.publicRooms;
+            mine.players = v.players;
+        }
+    }
+    return mine;
 }
 
 bool ParseDeskSummary(std::string_view text, DeskSummary* out)
 {
     const auto f = Split(text, '|');
-    if (f.size() != 3 || f[0].empty()) return false;
+    if ((f.size() != 3 && f.size() != 4) || f[0].empty()) return false;
     DeskSummary s;
     for (char c : f[0]) {
         if (c < '0' || c > '9') return false;
         s.rev = s.rev * 10 + static_cast<uint64_t>(c - '0');
     }
     if (!Int(f[1], &s.publicRooms) || !Int(f[2], &s.players)) return false;
+    if (f.size() == 4 && !f[3].empty()) {
+        for (std::string_view entry : Split(f[3], ',')) {
+            const auto p = Split(entry, ':');
+            DeskSummary::Version v;
+            if (p.size() != 3 || p[0].empty() || !Int(p[1], &v.publicRooms) || !Int(p[2], &v.players)) return false;
+            v.version = std::string(p[0]);
+            s.versions.push_back(std::move(v));
+        }
+    }
     *out = s;
     return true;
 }
