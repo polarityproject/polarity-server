@@ -134,13 +134,13 @@ repository into this one (it writes `deploy/keeper/`):
 D:\SteamLibrary\steamapps\common\StreetFighterV\sfv-rollback\scripts\keeper-bundle.ps1
 ```
 
-Commit that, then pack the `rooms` branch and copy it over. `git archive`
+Commit that, then pack the `main` branch and copy it over. `git archive`
 packs committed files only, so a test key or settings file left in
 `docker/` from trying the stack on your PC stays there:
 
 ```powershell
 cd D:\SteamLibrary\steamapps\common\StreetFighterV
-git -C sfvr-server archive --format=tar.gz -o ..\sfvr-rooms.tgz rooms
+git -C sfvr-server archive --format=tar.gz -o ..\sfvr-rooms.tgz main
 scp sfvr-rooms.tgz polarityadmin@203.0.113.10:~
 ```
 
