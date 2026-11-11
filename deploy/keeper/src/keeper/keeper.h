@@ -1,5 +1,5 @@
 #pragma once
-// sfvr-keeper (docs/online-lobby.md, "sfvr-keeper"; custom-rooms-plan.md M3):
+// polarity-keeper (docs/online-lobby.md, "polarity-keeper"; custom-rooms-plan.md M3):
 // hosts the presence rooms on the rooms server, one Weyvelength client per
 // room. The lobby channel the hub sits in (listed: kind=lobby, build=<lobby
 // protocol>, count), where players ask for custom rooms; and the custom rooms
@@ -36,7 +36,7 @@ struct KeeperOptions {
     std::string statePath;   // the room codes, to reclaim after a restart; empty: none kept
     KeyPair key;
     uint16_t protocol = 0;   // the lobby protocol the channel is for
-    std::string name = "SFVR";
+    std::string name = "Polarity";
     int maxRooms = 500;
     // The local UDP ports of its P2P links (--ports 47200-47299): the server's
     // firewall opens this range. 0 0: any.
@@ -95,7 +95,7 @@ private:
         bool removed = false; // kicked: what they sent before going is not acted on
         std::string chara;         // member data `ch`, for the list's faces
         std::string country;       // member data `@cc`, set by the rooms server from the address: for the rooms API
-        std::string version;       // member data `ver`: their SFVR version
+        std::string version;       // member data `ver`: their Polarity version
     };
     struct Outgoing {
         uint32_t to = 0;
@@ -163,7 +163,7 @@ private:
         int64_t reconnectMs = 0;
         // Custom rooms.
         RoomSettings settings;
-        std::string version; // its maker's SFVR version (room data `ver`): its players' too
+        std::string version; // its maker's Polarity version (room data `ver`): its players' too
         uint32_t owner = 0;
         bool ownerArrived = false;
         uint32_t requester = 0;  // the lobby member who asked (answered once the code is known)

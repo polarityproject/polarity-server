@@ -35,7 +35,7 @@
 namespace sfv {
 
 struct RelayConfig {
-    std::string name = "SFVR keeper"; // its name in the host's session
+    std::string name = "Polarity keeper"; // its name in the host's session
     size_t maxViewers = 16;
     int firstTo = 0; // the set's rules: decided once a player has this many wins (0: never by score)
     std::function<void(const std::string&)> log;

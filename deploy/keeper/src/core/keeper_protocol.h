@@ -1,6 +1,6 @@
 #pragma once
-// What the keeper (src/keeper/, sfvr-keeper on the server) and the mod say to
-// each other (docs/online-lobby.md, "sfvr-keeper"; custom-rooms-plan.md M3).
+// What the keeper (src/keeper/, polarity-keeper on the server) and the mod say to
+// each other (docs/online-lobby.md, "polarity-keeper"; custom-rooms-plan.md M3).
 // Portable: the keeper builds on Linux too.
 //
 // Presence rooms are Weyvelength rooms the keeper hosts: the lobby channel the
@@ -35,7 +35,7 @@ constexpr const char* kKind = "kind";     // "lobby" (the desk) or "custom"
 constexpr const char* kKindLobby = "lobby";
 constexpr const char* kKindCustom = "custom";
 constexpr const char* kBuild = "build";   // the lobby protocol (lobby::kProtocol)
-// Member data: the player's SFVR version ("0.3.0"); room data: the room's,
+// Member data: the player's Polarity version ("0.3.0"); room data: the room's,
 // its maker's. Players join only rooms of their own version (the netplay
 // check refuses other builds' matches anyway, after a whole handoff).
 constexpr const char* kVersion = "ver";
@@ -141,7 +141,7 @@ struct ListedRoom {
     int openSeats = 0;       // seats nobody sits in, over all tables
     std::string rules;       // the first table's (FormatRules)
     std::vector<std::string> faces; // up to six character codes of members
-    std::string version;     // the room's SFVR version ("" from a keeper before versions)
+    std::string version;     // the room's Polarity version ("" from a keeper before versions)
     // Every member, in join order, for the rooms API only (FormatRoomListJson;
     // the lobby's keys have no room for them).
     struct Player {
@@ -190,7 +190,7 @@ struct DeskSummary {
     uint64_t rev = 0;
     int publicRooms = 0;
     int players = 0;
-    // The same per SFVR version (players see their own version's: they list
+    // The same per Polarity version (players see their own version's: they list
     // only its rooms). The desk's listing has no slot left (Weyvelength
     // allows 5), so they ride in this one, cut to fit its 128 bytes.
     struct Version {
@@ -211,7 +211,7 @@ bool ParseDeskSummary(std::string_view text, DeskSummary* out);
 // What the keeper signs for a desk: "sfvr-desk 1 <code>\n<build>\n<count>\n<r>".
 std::string DeskMessage(std::string_view code, const Listing& listing);
 
-// The rooms API's document (the keeper's --status file, which sfvr-server's
+// The rooms API's document (the keeper's --status file, which polarity-server's
 // rooms publisher sends on): the public list as the lobby shows it, and three
 // public totals (user, 2026-11-06): players online, how many of them are in
 // public rooms, and the public rooms. Nothing else about private rooms.
@@ -222,7 +222,7 @@ struct RoomTotals {
 };
 // {"version":1,"updated":<unix ms>,"totals":{"online":..,"in_public_rooms":..,
 // "public_rooms":..},"rooms":[{"code":..,
-// "title":"Beginners Welcome!"|null,"title_id":10,"title_characters":[..],"owner":..,"sfvr_version":"0.3.0"|null,
+// "title":"Beginners Welcome!"|null,"title_id":10,"title_characters":[..],"owner":..,"client_version":"0.4.0"|null,"sfvr_version": the same,
 // "members":..,"capacity":16,"tables":..,
 // "open_seats":..,"rules":..,"faces":[..],"players":[{"name":..,"country":"DE"|null,
 // "face":"RYU"|null}]}]}; strings escaped for JSON.

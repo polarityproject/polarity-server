@@ -1,4 +1,4 @@
-# sfvr-keeper (custom rooms' tables and moderation) in a container: a client
+# polarity-keeper (custom rooms' tables and moderation) in a container: a client
 # of the rooms server beside it. Built on the VPS by compose.yaml from the
 # sources in deploy/keeper (the mod repository's scripts/keeper-bundle.ps1
 # copies them there); the guide is docs/rooms-vps-docker.md.
@@ -19,9 +19,9 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --system --uid 10001 --user-group --home-dir /data --shell /usr/sbin/nologin sfvr \
  && install -d -o 10001 -g 10001 -m 0750 /data
-COPY --from=build /build/sfvr-keeper /usr/local/bin/sfvr-keeper
-COPY --from=build /src/SOURCE.txt /usr/local/share/sfvr-keeper-source.txt
+COPY --from=build /build/polarity-keeper /usr/local/bin/polarity-keeper
+COPY --from=build /src/SOURCE.txt /usr/local/share/polarity-keeper-source.txt
 USER 10001:10001
 WORKDIR /data
 VOLUME /data
-ENTRYPOINT ["/usr/local/bin/sfvr-keeper"]
+ENTRYPOINT ["/usr/local/bin/polarity-keeper"]

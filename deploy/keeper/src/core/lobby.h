@@ -162,7 +162,7 @@ struct Message {
     // SessionState
     Seat seats[kNumPlayers];
     SessionPhase phase = SessionPhase::Lobby;
-    uint16_t played = 0;  // matches finished this session
+    uint16_t played = 0;  // matches finished this set (a table's next set starts over), else session
     uint8_t spectators = 0;
     uint16_t stage = kAnyStage; // the host's stage rule: a stage table index, kRandomStage or kAnyStage
     bool stageLocked = false;   // the host confirmed the stage: on to character select

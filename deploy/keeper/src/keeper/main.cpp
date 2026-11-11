@@ -1,8 +1,8 @@
-// sfvr-keeper: see keeper.h.
+// polarity-keeper: see keeper.h.
 //
-//   sfvr-keeper --key <file> [--server host:port] [--state <file>] [--words <file>] [--ports A-B] [--per-link-ports] [--protocol N]
+//   polarity-keeper --key <file> [--server host:port] [--state <file>] [--words <file>] [--ports A-B] [--per-link-ports] [--protocol N]
 //               [--metrics <file.prom>] [--status <file.json>] [--server-stats <file.json>]
-//   sfvr-keeper --new-key <file>    writes a key, prints its public half
+//   polarity-keeper --new-key <file>    writes a key, prints its public half
 //
 // Logs to stdout (the journal on the server). Every 5 s, when asked: its
 // metrics in the Prometheus text format (--metrics, for node_exporter's
@@ -93,9 +93,9 @@ void WriteFileAtomically(const std::string& path, const std::string& text)
 int Usage()
 {
     std::fprintf(stderr,
-                 "usage: sfvr-keeper --key <file> [--server host:port] [--state <file>] [--words <file>] [--ports A-B] [--per-link-ports] [--protocol N]\n"
+                 "usage: polarity-keeper --key <file> [--server host:port] [--state <file>] [--words <file>] [--ports A-B] [--per-link-ports] [--protocol N]\n"
                  "                   [--metrics <file.prom>] [--status <file.json>]\n"
-                 "       sfvr-keeper --new-key <file>\n");
+                 "       polarity-keeper --new-key <file>\n");
     return 2;
 }
 
@@ -177,7 +177,7 @@ int main(int argc, char** argv)
     // The word list again (docker compose kill -s HUP keeper), without a restart.
     std::signal(SIGHUP, OnHangUp);
 #endif
-    LogLine("sfvr-keeper: lobby protocol " + std::to_string(o.protocol) + ", public key " + Hex(o.key.pub, 8) + "..., " +
+    LogLine("polarity-keeper: lobby protocol " + std::to_string(o.protocol) + ", public key " + Hex(o.key.pub, 8) + "..., " +
             std::to_string(o.words.size()) + " filtered words");
 
     Keeper keeper(o);
@@ -210,6 +210,6 @@ int main(int argc, char** argv)
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
-    LogLine("sfvr-keeper: stopping");
+    LogLine("polarity-keeper: stopping");
     return 0;
 }

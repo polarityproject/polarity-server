@@ -583,7 +583,7 @@ void Keeper::OnMemberData(Room& room, uint32_t id, const std::string& key, const
     }
     else if (key == "@cc") {
         // The rooms server's own: the member's country from their address
-        // (sfvr-server docker/weyvelength-geoip.patch; clients cannot set '@'
+        // (polarity-server docker/weyvelength-geoip.patch; clients cannot set '@'
         // keys). Two letters (ISO 3166 alpha-2) or nothing: it goes out on the
         // rooms API.
         const bool ok = value.size() == 2 && std::isupper(static_cast<unsigned char>(value[0])) &&
@@ -593,7 +593,7 @@ void Keeper::OnMemberData(Room& room, uint32_t id, const std::string& key, const
     else if (key == kVersion) {
         m.version = value.substr(0, kVersionMax);
         if (room.kind == Kind::Custom && !room.version.empty() && !m.version.empty() && m.version != room.version)
-            Log("keeper: room %s: %s (%u) runs SFVR %s, the room %s", room.code.c_str(), m.name.c_str(), id, m.version.c_str(),
+            Log("keeper: room %s: %s (%u) runs Polarity %s, the room %s", room.code.c_str(), m.name.c_str(), id, m.version.c_str(),
                 room.version.c_str());
     }
     else if (key == kAck) {
@@ -648,7 +648,7 @@ void Keeper::OnRequest(Room& room, Member& m, const Request& request, int64_t no
         r->requester = m.id;
         r->requestSeq = request.seq;
         r->createdMs = nowMs;
-        Log("keeper: %s (%u) asks for a room: %s, %d tables, %s, SFVR %s", m.name.c_str(), m.id, FormatTitle(settings.title).c_str(),
+        Log("keeper: %s (%u) asks for a room: %s, %d tables, %s, Polarity %s", m.name.c_str(), m.id, FormatTitle(settings.title).c_str(),
             settings.tables, settings.isPublic ? "public" : "private", m.version.empty() ? "?" : m.version.c_str());
         // Made once its connect comes through (Step); a failed one answers no (Close).
         Ask(r->connecting, r->connectAskedMs, nowMs);
@@ -1775,7 +1775,7 @@ void Keeper::PumpRelayDown(Room& room, RelayLink& r, int64_t nowMs)
             if (e.data.peer_left.id != self) r.core->ViewerGone(e.data.peer_left.id);
             break;
         case WEYVE_EVENT_CHAT:
-            // No SFVR build chats here (the match room's rule, M6).
+            // No Polarity build chats here (the match room's rule, M6).
             if (e.data.chat.from != self) weyve_ban_member(c, e.data.chat.from);
             break;
         default:

@@ -135,6 +135,12 @@ public:
     // follows (win screens, menus) need not stay in step, so the session stops
     // comparing states. Must turn true on the same frame on both peers.
     virtual bool OutcomeDecided() { return false; }
+
+    // After Advance: the game's flags for the state the tick left, which the
+    // session keeps per frame (ReplayFile::frameFlags). kFrameFight: a
+    // round's fight is on (after "FIGHT!", before its KO or time over).
+    static constexpr uint8_t kFrameFight = 1;
+    virtual uint8_t FrameFlags() { return 0; }
 };
 
 } // namespace sfv

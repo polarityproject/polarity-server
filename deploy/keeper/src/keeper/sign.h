@@ -4,7 +4,7 @@
 // (sfv::VerifySignature). BCrypt on Windows, OpenSSL on Linux.
 //
 // Key file: one line of hex, the private scalar d then the public x and y
-// (96 bytes, 192 hex digits). `sfvr-keeper --new-key <file>` writes one and
+// (96 bytes, 192 hex digits). `polarity-keeper --new-key <file>` writes one and
 // prints the public half for the mod.
 
 #include <cstddef>

@@ -1,5 +1,6 @@
 #!/bin/sh
-# Installs (or updates) sfvr-keeper beside sfvr-server (install.sh first):
+# Installs (or updates) polarity-keeper beside sfvr-server (install.sh first)
+# under its deployment name, sfvr-keeper:
 # builds it from the sources in this folder (the mod repository's, copied
 # by its scripts/keeper-bundle.ps1), makes its signing key the first time
 # (and prints the public half for the mod), opens its UDP range in ufw and
@@ -36,7 +37,7 @@ cmake --build "$HOME_DIR/keeper-build" -j "$(nproc)"
 
 echo "== install"
 install -d -m 0755 "$BIN"
-install -m 0755 "$HOME_DIR/keeper-build/sfvr-keeper" "$BIN/sfvr-keeper"
+install -m 0755 "$HOME_DIR/keeper-build/polarity-keeper" "$BIN/sfvr-keeper"
 install -d -m 0755 "$ETC"
 if [ ! -f "$ETC/keeper.key" ]; then
 	"$BIN/sfvr-keeper" --new-key "$ETC/keeper.key"
