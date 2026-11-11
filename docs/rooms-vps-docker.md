@@ -1,6 +1,6 @@
 # Custom rooms server on a fresh Ubuntu VPS, in Docker
 
-How to set up SFVR's server in Docker: the server the rooms builds
+How to set up Polarity's server in Docker: the server the rooms builds
 (0.3.0-rooms.N) use, and from 0.3.0 the one public server (user,
 2026-11-06: the rooms VPS takes over; only updates stay on the website). It
 runs these containers from `docker/compose.yaml`:
@@ -10,7 +10,7 @@ runs these containers from `docker/compose.yaml`:
 | `server` | The rooms server (Weyvelength), the same commit as today's public server | TCP 5555 (and 443, redirected) |
 | `ice` | Fresh Cloudflare TURN credentials for it every 6 hours | outbound HTTPS only |
 | `geoip` | DB-IP's free IP-to-country database for it, every month: players' countries for the rooms API | outbound HTTPS only |
-| `keeper` | sfvr-keeper: custom rooms' tables, calls, rotation and moderation; a client of the server | UDP 47200–47299 (its peer-to-peer links) |
+| `keeper` | polarity-keeper: custom rooms' tables, calls, rotation and moderation; a client of the server | UDP 47200–47299 (its peer-to-peer links) |
 | `reports` | sfvr-reports: the games' desync and crash reports, into the host's `/var/lib/sfvr-server/` ([Reports](#reports)) | TCP 5580 |
 
 Until 0.3.0 the rooms builds still send their reports to the main VPS (their
@@ -131,7 +131,7 @@ On your PC, after any keeper change, copy the keeper's sources from the mod
 repository into this one (it writes `deploy/keeper/`):
 
 ```powershell
-D:\SteamLibrary\steamapps\common\StreetFighterV\sfv-rollback\scripts\keeper-bundle.ps1
+D:\SteamLibrary\steamapps\common\StreetFighterV\polarity-client\scripts\keeper-bundle.ps1
 ```
 
 Commit that, then pack the `main` branch and copy it over. `git archive`
@@ -140,7 +140,7 @@ packs committed files only, so a test key or settings file left in
 
 ```powershell
 cd D:\SteamLibrary\steamapps\common\StreetFighterV
-git -C sfvr-server archive --format=tar.gz -o ..\sfvr-rooms.tgz main
+git -C polarity-server archive --format=tar.gz -o ..\sfvr-rooms.tgz main
 scp sfvr-rooms.tgz polarityadmin@203.0.113.10:~
 ```
 
@@ -242,7 +242,7 @@ In the mod repository's `rooms` branch:
 
 Before that build, a rooms build can test the server with its ini: `server`
 set to `203.0.113.10:5555` in the panel, and `[rooms] keeper_key=<public
-key>` in `sfv_rollback.ini`.
+key>` in `polarity.ini`.
 
 ## Monitoring
 
@@ -298,14 +298,14 @@ ssh -L 3000:127.0.0.1:3000 polarityadmin@203.0.113.10
 ```
 
 Leave that session open and browse to http://localhost:3000. User `admin`,
-the password `sudo cat secrets/grafana_admin` prints. The SFVR folder has:
+the password `sudo cat secrets/grafana_admin` prints. The Polarity folder has:
 
-- **SFVR rooms service** (the home page): the keeper's loop (how long one step
+- **Polarity rooms service** (the home page): the keeper's loop (how long one step
   takes, how busy it is, how much of it is log writing), members, rooms,
   tables by phase, sets, calls and tickets, relays and viewers, the publisher.
-- **SFVR rooms VPS**: CPU (steal is a busy neighbour on the VPS host), load,
+- **Polarity rooms VPS**: CPU (steal is a busy neighbour on the VPS host), load,
   memory, disk, network, UDP drops, each container's CPU and memory.
-- **SFVR rooms logs**: log lines per minute, the keeper, the server, ice and
+- **Polarity rooms logs**: log lines per minute, the keeper, the server, ice and
   the publisher, errors from every container, SSH logins, firewall blocks,
   the rest of the host's journal. The `Contains` box filters every panel.
 
@@ -333,7 +333,7 @@ The keeper reads `keeper-words.txt` (`--words`) at start. In public rooms:
   room list, previews and the rooms API.
 - Each public room carries the list (room data `wl0`.. and its hash `wlv`),
   and the game stars the listed words in chat as it shows them.
-- Players can turn the Word filter off in SFVR settings: they then see names
+- Players can turn the Word filter off in Polarity settings: they then see names
   and chat in rooms as they are. The room list, previews and the rooms API
   stay filtered. Private rooms are never filtered.
 
@@ -374,7 +374,7 @@ The full specification for tool builders (every field, errors, caching,
 reference tables) is `docs/rooms-api.md`; this section is about running it.
 
 ```
-GET https://sfvr-rooms-api.<your account>.workers.dev/v1/rooms
+GET https://polarity-rooms-api.<your account>.workers.dev/v1/rooms
 {"version":1,"updated":1793992354396,"age":4,"stale":false,
  "attribution":"IP Geolocation by DB-IP (https://db-ip.com), CC BY 4.0",
  "rooms":[{"code":"4SLJEV","title":"Karin user looking for M. Bison!","title_id":3,
@@ -405,9 +405,9 @@ GET .../v1/summary
   server gives each member the member data `@cc` and refuses `@` keys from
   clients. A VPN shows its exit's country; `null` when unknown. The game
   shows the same flags beside names, and a player who turns "Country flag"
-  off in SFVR's settings sends member data `nocc=1`: the server then gives
+  off in Polarity's settings sends member data `nocc=1`: the server then gives
   them no `@cc` at all (here as `null`), in every room. The notice about it is
-  on the SFVR site.
+  on the Polarity site.
 - **Attribution**: DB-IP's licence (CC BY 4.0) asks whoever shows the countries
   to credit them: the `attribution` line, or `IP Geolocation by DB-IP` with a
   link to https://db-ip.com, beside the flags on a page or in an embed.
@@ -426,11 +426,11 @@ GET .../v1/summary
 ### Deploy it
 
 On your PC, with Node and a Cloudflare login (`npx wrangler login`), from
-`sfvr-server/cloudflare/rooms-api`:
+`polarity-server/cloudflare/rooms-api`:
 
 ```powershell
 node test.mjs
-npx wrangler r2 bucket create sfvr-rooms
+npx wrangler r2 bucket create polarity-rooms
 npx wrangler secret put PUSH_SECRET
 npx wrangler deploy
 ```
@@ -440,7 +440,7 @@ prints on the VPS. `deploy` prints the Worker's address. On the VPS, put it in
 `monitoring.env`:
 
 ```
-ROOMS_API_URL=https://sfvr-rooms-api.<your account>.workers.dev
+ROOMS_API_URL=https://polarity-rooms-api.<your account>.workers.dev
 ```
 
 then `dc up -d publisher` (with the alias above) and, after 10 s,
@@ -453,7 +453,7 @@ PUSH_SECRET` with it, `dc up -d --force-recreate publisher`.
 ## Reports
 
 The `reports` container takes the games' desync and crash reports (the
-mod sends them unless the player turned it off: SFVR settings, Send
+mod sends them unless the player turned it off: Polarity settings, Send
 reports) on TCP 5580 and files them in the host's folders:
 
 - `/var/lib/sfvr-server/reports/<match id>/` (both players' halves of a
@@ -480,7 +480,7 @@ with the host's Python, as before:
 sudo python3 /opt/sfvr-rooms/deploy/collect-reports.py --crashes --out ~
 ```
 
-then `scp` the zip to your PC (sfv-rollback's `docs/reviewing-reports.md`
+then `scp` the zip to your PC (polarity-client's `docs/reviewing-reports.md`
 for what to do with it). Without Python on the host, the image has it:
 
 ```bash
@@ -490,7 +490,7 @@ dc run --rm -v ~:/out --entrypoint python3 reports /usr/local/bin/collect-report
 
 ## Moving to 0.3.0
 
-At 0.3.0 this VPS becomes SFVR's server: 0.3.0's defaults are this
+At 0.3.0 this VPS becomes Polarity's server: 0.3.0's defaults are this
 address for the rooms server (5555, and 443) and for reports (5580), and
 its built-in keeper key is this keeper's. Updates stay on the website.
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# sfvr-rooms publisher: sends the keeper's public room list (its --status
+# The rooms publisher: sends the keeper's public room list (its --status
 # file, written every 5 s) to the rooms API (cloudflare/rooms-api), so sites
 # and bots read it from Cloudflare and never load the VPS.
 #
@@ -87,7 +87,7 @@ def push(url, secret, body):
     req = urllib.request.Request(url, data=body, method="POST", headers={
         "Content-Type": "application/json",
         "Authorization": "Bearer " + secret,
-        "User-Agent": "sfvr-rooms-publisher/1",
+        "User-Agent": "polarity-rooms-publisher/1",
     })
     with urllib.request.urlopen(req, timeout=10) as r:
         return r.status

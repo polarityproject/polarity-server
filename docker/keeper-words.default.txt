@@ -1,4 +1,4 @@
-# The word filter's list (sfvr-keeper --words): public rooms show names it
+# The word filter's list (polarity-keeper --words): public rooms show names it
 # rejects as "Player 1234" and star its words in chat (the game's Word filter
 # setting; private rooms are never filtered). Copy to keeper-words.txt and
 # edit there; `docker compose kill -s HUP keeper` reads it again.

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-# sfvr-reports: takes desync and crash reports from SFVR games (the mod
-# sends them unless the player turned it off). Desync reports are filed by
+# polarity-reports: takes desync and crash reports from Polarity games (the
+# mod sends them unless the player turned it off). Installed on the VPS
+# under its deployment name, sfvr-reports. Desync reports are filed by
 # match, so both players' halves of a desync end up side by side; crash
 # reports by day:
 #
@@ -15,7 +16,8 @@
 # (--max-crashes-mb) the oldest folders are removed. GET /v1/health answers
 # "ok".
 #
-# Settings come from /etc/sfvr-server/server.env (sfvr-reports.service):
+# Settings come from /etc/sfvr-server/server.env (sfvr-reports.service; the
+# deployment keeps its SFVR names):
 # SFVR_REPORTS_PORT, SFVR_REPORTS_MAX_MB, SFVR_CRASHES_MAX_MB. Standard
 # library only.
 import argparse
@@ -33,9 +35,10 @@ NAME = re.compile(
     r"_(?P<match>[0-9a-f]{8})_(?:p1|p2|spec)(?:_desync)?\.(?P<ext>sfvr|log)$"
 )
 CRASH = re.compile(r"^(?P<day>\d{4}-\d{2}-\d{2})_\d{2}-\d{2}-\d{2}_crash_[0-9a-f]{8}\.(?P<ext>log|dmp)$")
-# Recordings and logs start with "SFVR" (a recording with its format
-# version, a log with "SFVR <mod version> ..."); a minidump with "MDMP".
-MAGIC = {"sfvr": b"SFVR", "log": b"SFVR", "dmp": b"MDMP"}
+# Recordings start with "SFVR" and their format version (the magic stays
+# with the rename); logs with "Polarity <mod version> ...", or "SFVR <mod
+# version> ..." from builds before 0.4.0; a minidump with "MDMP".
+MAGIC = {"sfvr": (b"SFVR",), "log": (b"Polarity", b"SFVR"), "dmp": (b"MDMP",)}
 
 
 class Store:
@@ -129,7 +132,7 @@ def log(text):
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
-    server_version = "sfvr-reports"
+    server_version = "polarity-reports"
     sys_version = ""
     timeout = 30
 
@@ -169,7 +172,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if length > self.server.max_file:
             return self.answer(413, "too large")
         magic = MAGIC[m["ext"]]
-        if length < len(magic):
+        if length < min(len(x) for x in magic):
             return self.answer(400, "empty")
         if not self.server.limiter.allow(self.client_address[0]):
             return self.answer(429, "too many reports, try later")
@@ -177,15 +180,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if len(data) != length:
             return self.answer(400, "cut short")
         if not data.startswith(magic):
-            return self.answer(400, "not an SFVR file")
-        version = re.sub(r"[^0-9A-Za-z.+-]", "", self.headers.get("X-SFVR-Version", ""))[:32] or "?"
+            return self.answer(400, "not a Polarity file")
+        # X-SFVR-Version from builds before 0.4.0.
+        sent = self.headers.get("X-Polarity-Version") or self.headers.get("X-SFVR-Version", "")
+        version = re.sub(r"[^0-9A-Za-z.+-]", "", sent)[:32] or "?"
         try:
             stored = store.put(m[key], name, data, version)
         except OSError as e:
             log(f"cannot store {name}: {e}")
             return self.answer(507, "cannot store it")
         if stored:
-            log(f"stored {name} ({length // 1024} KB, SFVR {version})")
+            log(f"stored {name} ({length // 1024} KB, version {version})")
         self.answer(201 if stored else 200, "stored" if stored else "already here")
 
 
@@ -207,7 +212,7 @@ def main():
     server.limiter = Limiter(a.per_hour)
     server.max_file = a.max_file_mb * 1024 * 1024
     log(
-        f"sfvr-reports on {a.bind}:{a.port}, into {a.dir} ({server.store.total // (1024 * 1024)} of {a.max_total_mb} MB)"
+        f"polarity-reports on {a.bind}:{a.port}, into {a.dir} ({server.store.total // (1024 * 1024)} of {a.max_total_mb} MB)"
         f" and {a.crashes_dir} ({server.crashes.total // (1024 * 1024)} of {a.max_crashes_mb} MB)"
     )
     try:

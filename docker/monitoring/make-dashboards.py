@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 # Writes the rooms VPS's Grafana dashboards (monitoring/dashboards/*.json,
 # provisioned read-only by compose.monitoring.yaml). Edit here, run it
-# (python3 make-dashboards.py), commit both.
-#   sfvr-rooms-service.json  the keeper: loop, rooms, tables, sets, relays, the publisher
-#   sfvr-rooms-vps.json      the VPS: CPU, memory, disk, network, per container
-#   sfvr-rooms-logs.json     the containers' and the host's logs (Loki)
+# (python3 make-dashboards.py), commit both. The uids keep their sfvr-rooms-*
+# names: Grafana stores the dashboards under them, so a rename would leave
+# old copies behind.
+#   polarity-rooms-service.json  the keeper: loop, rooms, tables, sets, relays, the publisher
+#   polarity-rooms-vps.json      the VPS: CPU, memory, disk, network, per container
+#   polarity-rooms-logs.json     the containers' and the host's logs (Loki)
 import json
 import os
 
@@ -96,11 +98,11 @@ class Board:
 
     def write(self, name):
         doc = {
-            "uid": self.uid, "title": self.title, "description": self.description, "tags": ["sfvr"],
+            "uid": self.uid, "title": self.title, "description": self.description, "tags": ["polarity"],
             "timezone": "browser", "schemaVersion": 39, "version": 1, "editable": False, "graphTooltip": 1,
             "refresh": self.refresh, "time": {"from": self.time_from, "to": "now"},
             "templating": {"list": self.templating}, "annotations": {"list": []},
-            "links": [{"title": "SFVR", "type": "dashboards", "tags": ["sfvr"], "asDropdown": True}],
+            "links": [{"title": "Polarity", "type": "dashboards", "tags": ["polarity"], "asDropdown": True}],
             "panels": self.panels,
         }
         path = os.path.join(HERE, "dashboards", name)
@@ -116,7 +118,7 @@ SVC = 'service'
 
 
 def service():
-    b = Board("sfvr-rooms-service", "SFVR rooms service",
+    b = Board("sfvr-rooms-service", "Polarity rooms service",
               "The keeper (tables, rooms, relays) and the rooms publisher, from the keeper's metrics file.")
     b.row("Now")
     b.stat("Desk", "sfvr_keeper_lobby_up", w=2,
@@ -206,11 +208,11 @@ def service():
         ("increase(sfvr_publisher_pushes_total[5m])", "pushes (5 min)"),
         ("increase(sfvr_publisher_failures_total[5m])", "failures (5 min)"),
     ], w=16, h=4)
-    b.write("sfvr-rooms-service.json")
+    b.write("polarity-rooms-service.json")
 
 
 def vps():
-    b = Board("sfvr-rooms-vps", "SFVR rooms VPS", "The VPS's health (node_exporter) and each container (container-stats).")
+    b = Board("sfvr-rooms-vps", "Polarity rooms VPS", "The VPS's health (node_exporter) and each container (container-stats).")
     b.row("Now")
     b.stat("Up", "time() - node_boot_time_seconds", unit="s", w=4, decimals=0)
     b.stat("CPU busy", '1 - avg(rate(node_cpu_seconds_total{mode="idle"}[1m]))', unit="percentunit", w=4, thresholds=RED_AT(0.7, 0.9))
@@ -261,11 +263,11 @@ def vps():
     b.series("Monitoring's own storage", [
         ("prometheus_tsdb_storage_blocks_bytes + prometheus_tsdb_head_chunks_storage_size_bytes", "prometheus"),
     ], unit="bytes", w=12)
-    b.write("sfvr-rooms-vps.json")
+    b.write("polarity-rooms-vps.json")
 
 
 def logs():
-    b = Board("sfvr-rooms-logs", "SFVR rooms logs", "Every container's log and the host's journal (Loki, 14 days).",
+    b = Board("sfvr-rooms-logs", "Polarity rooms logs", "Every container's log and the host's journal (Loki, 14 days).",
               refresh="", time_from="now-1h")
     b.textbox("filter", "Contains (regex)", "")
     b.log_series("Log lines per minute", [
@@ -279,7 +281,7 @@ def logs():
     b.logs("SSH logins", '{job="host", identifier="sshd"} |~ "Accepted|Failed|Invalid|Disconnected" |~ "$filter"', w=12, h=10)
     b.logs("Firewall blocks (ufw)", '{job="host"} |= "UFW BLOCK" |~ "$filter"', w=12, h=10)
     b.logs("Host: docker, kernel, system", '{job="host", identifier!="sshd"} != "UFW BLOCK" |~ "$filter"', h=10)
-    b.write("sfvr-rooms-logs.json")
+    b.write("polarity-rooms-logs.json")
 
 
 if __name__ == "__main__":

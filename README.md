@@ -1,7 +1,8 @@
-# sfvr-server
+# polarity-server
 
-The rooms server for SFVR, the Street Fighter V rollback netplay mod (the
-`sfv-rollback` repository):
+The rooms server for Polarity, the Street Fighter V rollback netplay mod (the
+`polarity-client` repository). On a VPS it installs under its deployment
+name, `sfvr-server`:
 [Weyvelength](https://github.com/HeatXD/Weyvelength), built from a pinned
 commit and run on a Linux VPS with systemd, with Cloudflare TURN for pairs
 of players that can't link directly. Matches run peer to peer; the server

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Packs the desync reports sfvr-reports has received (and with --crashes the
+# Packs the desync reports polarity-reports has received (and with --crashes the
 # crash reports) into one zip to download, then deletes them from the server.
 # The zip holds them as the mod repository's docs/reviewing-reports.md lays
 # them out, so it unpacks straight into the game's Binaries\Win64\reports:
@@ -7,7 +7,7 @@
 #   desyncs/<match id>/<file names as the game saved them>, received.txt
 #   crashes/<date>/<date>_<time>_crash_<id>.log (and .dmp), received.txt
 #
-# The folders are moved aside first (sfvr-reports goes on taking reports, a
+# The folders are moved aside first (polarity-reports goes on taking reports, a
 # new file for a moved match starts a new folder for the next zip), and
 # deleted only once the zip is complete and reads back; anything that fails
 # puts them back. A match that got a file in the last --min-age minutes (10)
@@ -41,7 +41,7 @@ def size_of(path):
 
 
 def newest_change(path):
-    # A folder's own time moves with each upload (sfvr-reports touches it);
+    # A folder's own time moves with each upload (polarity-reports touches it);
     # its files' times too, in case something else wrote one.
     newest = os.path.getmtime(path)
     for base, _, files in os.walk(path):
@@ -84,7 +84,7 @@ def give_to_caller(path):
 
 
 def main():
-    p = argparse.ArgumentParser(description="Pack sfvr-reports' desync (and crash) reports into a zip and delete them.")
+    p = argparse.ArgumentParser(description="Pack polarity-reports' desync (and crash) reports into a zip and delete them.")
     p.add_argument("--reports-dir", default=os.path.join(STATE, "reports"))
     p.add_argument("--crashes-dir", default=os.path.join(STATE, "crashes"))
     p.add_argument("--crashes", action="store_true", help="the crash reports too")
@@ -119,12 +119,12 @@ def main():
     out = os.path.abspath(a.out)
     os.makedirs(out, exist_ok=True)
     stamp = time.strftime("%Y-%m-%d_%H%M%S")
-    zip_path = os.path.join(out, f"sfvr-reports-{stamp}.zip")
+    zip_path = os.path.join(out, f"polarity-reports-{stamp}.zip")
     if shutil.disk_usage(out).free < total + 64 * 1024 * 1024:
         print(f"not enough free space in {out} for the zip ({total // (1024 * 1024)} MB)", file=sys.stderr)
         return 1
 
-    # Moved aside within its own folder (same disk: a rename), so sfvr-reports
+    # Moved aside within its own folder (same disk: a rename), so polarity-reports
     # files a late upload in a new folder instead of one being packed.
     moved = []  # (kind, name, original path, aside path)
     for kind, name, path in picked:

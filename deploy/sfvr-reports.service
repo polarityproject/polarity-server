@@ -1,8 +1,8 @@
-# sfvr-reports: takes the desync and crash reports SFVR games send, under
+# polarity-reports: takes the desync and crash reports Polarity games send, under
 # /var/lib/sfvr-server/reports and crashes (docs/server-vps.md, "Desync and
 # crash reports").
 [Unit]
-Description=sfvr-server, desync and crash reports from SFVR games
+Description=sfvr-server, desync and crash reports from Polarity games
 After=network-online.target
 Wants=network-online.target
 

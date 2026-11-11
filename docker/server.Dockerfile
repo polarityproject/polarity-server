@@ -1,4 +1,4 @@
-# sfvr-server's rooms server (Weyvelength) in a container, and beside it the
+# polarity-server's rooms server (Weyvelength) in a container, and beside it the
 # Cloudflare TURN minter (ice-loop.sh) and the DB-IP country database's
 # monthly download (geoip-loop.sh), the same image. Built on the VPS by
 # compose.yaml; the guide is docs/rooms-vps-docker.md.

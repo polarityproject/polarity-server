@@ -1,8 +1,9 @@
-# Running sfvr-server on a Linux VPS
+# Running the rooms server on a Linux VPS
 
-sfvr-server is the mod's rooms server: Weyvelength, installed under its own
+polarity-server installs the mod's rooms server, Weyvelength, under its own
 name so it can share the VPS with other, unrelated servers. Everything it
-adds is called `sfvr-server`:
+adds is called `sfvr-server` (the deployment kept its name when the project
+became Polarity):
 
 | What | Where |
 | --- | --- |
@@ -189,7 +190,7 @@ Settings, then Server, shows which one is in use.
 **For everyone:** the mod's built-in default is the public server,
 `203.0.113.20:5555` (`kDefaultServer` in the mod repository's
 `src/mod/netplay_driver.h`). It is used whenever `[weyve] server` is empty
-or missing, and the shipped `sfv_rollback.ini` (the mod's
+or missing, and the shipped `polarity.ini` (the mod's
 `scripts/package.ps1`) writes the same address. If the
 server moves, change both (or point a DNS name at it and use the name):
 
@@ -220,8 +221,8 @@ through turn.cloudflare.com`.
 
 ## Desync and crash reports
 
-`install.sh` also installs `sfvr-reports` (`deploy/sfvr-reports.py`, Python's
-standard library only, service `sfvr-reports`). SFVR games send it reports
+`install.sh` also installs polarity-reports (`deploy/sfvr-reports.py`, Python's
+standard library only, service `sfvr-reports`). Polarity games send it reports
 unless the player turned it off (Settings, Logs):
 
 - **Desyncs**, after a match that had one: the desync's recording, the
@@ -234,13 +235,13 @@ unless the player turned it off (Settings, Logs):
 ```text
 /var/lib/sfvr-server/reports/<match id>/<file names as the game saved them>
 /var/lib/sfvr-server/crashes/<date>/<date>_<time>_crash_<id>.log (and .dmp)
-<each folder>/received.txt   # when each file came, from which SFVR version
+<each folder>/received.txt   # when each file came, from which Polarity version
 ```
 
 - **Port**: TCP 5580 (`SFVR_REPORTS_PORT` in `/etc/sfvr-server/server.env`),
   plain HTTP. Open it in the firewall (`sudo ufw allow 5580/tcp`). The mod's
   built-in address is `http://203.0.113.20:5580`; `[report] url` in
-  `sfv_rollback.ini` sends elsewhere.
+  `polarity.ini` sends elsewhere.
 - **What it takes**: only file names the mod gives its recordings, match
   logs and crash reports, only files that start as the mod writes them, at
   most 16 MB each, 120 files an hour from one address. Anything else gets a
@@ -274,22 +275,22 @@ sudo python3 /opt/sfvr-server/bin/collect-reports.py              # desyncs, int
 sudo python3 /opt/sfvr-server/bin/collect-reports.py --crashes --out /root
 ```
 
-It prints the zip's path (`sfvr-reports-<date>_<time>.zip`; under `sudo` it
+It prints the zip's path (`polarity-reports-<date>_<time>.zip`; under `sudo` it
 belongs to your login). The zip holds `desyncs/<match id>/...` and
 `crashes/<date>/...`, so it unpacks straight into the game's `reports`
 folder:
 
 ```powershell
-scp root@203.0.113.20:/root/sfvr-reports-<date>_<time>.zip .
-Expand-Archive sfvr-reports-<date>_<time>.zip <game>\Binaries\Win64\reports
+scp root@203.0.113.20:/root/polarity-reports-<date>_<time>.zip .
+Expand-Archive polarity-reports-<date>_<time>.zip <game>\Binaries\Win64\reports
 ```
 
 - The reports are deleted only once the zip is complete and reads back; a
   failure leaves them where they were. `--keep` packs them and leaves them.
 - A match that got a file in the last 10 minutes (`--min-age`) stays for the
   next run, so both players' halves go in one zip.
-- `sfvr-reports` goes on taking reports meanwhile. The zip is yours to
-  delete on the server once downloaded (`rm /root/sfvr-reports-*.zip`).
+- The reports service goes on taking reports meanwhile. The zip is yours to
+  delete on the server once downloaded (`rm /root/polarity-reports-*.zip`).
 
 ## Day to day
 

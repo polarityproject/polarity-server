@@ -1,16 +1,16 @@
-# The SFVR rooms API Worker (src/worker.js). Deploy from this folder:
-#   npx wrangler r2 bucket create sfvr-rooms
+# The Polarity rooms API Worker (src/worker.js). Deploy from this folder:
+#   npx wrangler r2 bucket create polarity-rooms
 #   npx wrangler secret put PUSH_SECRET      (the VPS's secrets/rooms_push)
 #   npx wrangler deploy
 # docs/rooms-vps-docker.md, "Rooms API", has the whole setup.
-name = "sfvr-rooms-api"
+name = "polarity-rooms-api"
 main = "src/worker.js"
 compatibility_date = "2024-11-01"
 workers_dev = true
 
 [[r2_buckets]]
 binding = "ROOMS"
-bucket_name = "sfvr-rooms"
+bucket_name = "polarity-rooms"
 
 [observability]
 enabled = true

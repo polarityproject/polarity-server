@@ -1,6 +1,7 @@
 # Changelog
 
-Releases of sfvr-server, the rooms server for SFVR. A server release goes
+Releases of polarity-server (sfvr-server before the project became
+Polarity), the rooms server for Polarity. A server release goes
 with the mod builds that speak its Weyvelength protocol: the pinned commit
 must match the mod's (see the README). Newest first; the format follows
 [Keep a Changelog](https://keepachangelog.com).
@@ -9,6 +10,11 @@ must match the mod's (see the README). Newest first; the format follows
 
 ### Added
 
+- The reports service takes logs headed `Polarity <version>` and the
+  `X-Polarity-Version` header from Polarity 0.4.0, as well as the SFVR ones
+  from older builds. Deploy it before 0.4.0 goes out, or 0.4.0's desync
+  and crash reports are refused.
+
 - `docs/rooms-api.md`: the rooms API's specification for tool builders
   (endpoints, every field, errors, caching and polling, title, character
   and rules tables).
@@ -16,6 +22,15 @@ must match the mod's (see the README). Newest first; the format follows
   plays.
 
 ### Changed
+
+- The project is now Polarity: this repository is polarity-server, the
+  services are polarity-reports and polarity-keeper, and the Grafana
+  dashboards are "Polarity rooms service", "Polarity rooms VPS" and
+  "Polarity rooms logs" in a Polarity folder (same uids, so they are
+  renamed in place; delete the empty SFVR folder once). The rooms API's
+  Worker and bucket are new: polarity-rooms-api and polarity-rooms. The
+  VPS keeps its deployed names (`sfvr-server`, `sfvr-rooms`, the `sfvr-*`
+  units and users, `SFVR_*` settings, the metric names).
 
 - A table's call lasts 21 s (20 on the your-turn card), 26 after a set that
   broke off: a player called while watching another table first leaves

@@ -98,7 +98,7 @@ index 896d780..68b4a62 100644
  		Proto::IceServers ice; // stun/turn handed to every client on connect
 +		std::string geoip_path; // an IP-to-country database (MaxMind DB format); empty = no countries
 +		std::string geoip_private; // the country for loopback/private addresses (testing on a LAN)
-+		std::string stats_path; // every 5 s: {"connections":..,"rooms":..,"listed":..} (sfvr-keeper reads it); empty = none
++		std::string stats_path; // every 5 s: {"connections":..,"rooms":..,"listed":..} (the keeper reads it); empty = none
  	};
  
 +	// The member data key the server sets on every member it can place: their

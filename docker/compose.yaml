@@ -1,11 +1,11 @@
-# SFVR's custom rooms server on one VPS (docs/rooms-vps-docker.md):
+# Polarity's custom rooms server on one VPS (docs/rooms-vps-docker.md):
 #   server  the rooms server (Weyvelength), TCP ${SFVR_PORT} (5555)
 #   ice     Cloudflare TURN credentials for it, every 6 hours
 #   geoip   DB-IP's free IP-to-country database for it, every month (members'
 #           countries on the public room lists; IP Geolocation by DB-IP)
-#   keeper  sfvr-keeper, the tables and moderation, a client of the server;
+#   keeper  polarity-keeper, the tables and moderation, a client of the server;
 #           its peer-to-peer links use UDP ${KEEPER_PORTS}
-#   reports sfvr-reports, the games' desync and crash reports, TCP
+#   reports polarity-reports, the games' desync and crash reports, TCP
 #           ${REPORTS_PORT} (5580), into the host's /var/lib/sfvr-server
 # Run from this folder: docker compose up -d --build
 #

@@ -1,6 +1,6 @@
-# SFVR rooms API: specification
+# Polarity rooms API: specification
 
-The rooms API is SFVR's public, read-only view of its custom rooms: which
+The rooms API is Polarity's public, read-only view of its custom rooms: which
 public rooms are open, who is in them, and how many players are online. It
 is meant for websites, Discord bots, stream overlays and other tools. This
 document is the contract such tools can rely on.
@@ -12,7 +12,7 @@ is deployed is in `docs/rooms-vps-docker.md`, "Rooms API".
 ## Base URL
 
 ```
-https://sfvr-rooms-api.<account>.workers.dev
+https://polarity-rooms-api.<account>.workers.dev
 ```
 
 This is the Worker's own address. A custom domain may be put in front of it
@@ -67,7 +67,8 @@ For the true age, use `updated` against your own clock.
       "title_id": 3,
       "title_characters": ["KRN", "VEG"],
       "owner": "POLARITYDEV",
-      "sfvr_version": "0.3.0",
+      "client_version": "0.4.0",
+      "sfvr_version": "0.4.0",
       "members": 3,
       "capacity": 16,
       "tables": 2,
@@ -103,7 +104,8 @@ A tool that does not show countries does not need it.
 | `title_id` | integer | Which title, from the table below (`0` = none). Use it to show the title in another language, or to filter. |
 | `title_characters` | array of strings | The character codes a title names, in order: two for title `3`, none otherwise. Already filled into `title`. |
 | `owner` | string | The owner's name as the room shows it (see Names). The empty string when the owner just left and the room has not passed on yet. |
-| `sfvr_version` | string or `null` | The SFVR version the room plays ("0.3.0"). Only players on that version can list and join it. `null` from a keeper older than versions (none should remain). New in 0.3.0; ignore it if absent. |
+| `client_version` | string or `null` | The Polarity version the room plays ("0.4.0"). Only players on that version can list and join it. New in 0.4.0; read `sfvr_version` when it is absent. |
+| `sfvr_version` | string or `null` | The same as `client_version`, under its name from before 0.4.0, for readers written then. `null` from a keeper older than versions (none should remain). New in 0.3.0; to be dropped once readers have moved to `client_version`. |
 | `members` | integer | Players in the room now (1 to `capacity`). The room's keeper is not counted. |
 | `capacity` | integer | The most a room holds: `16`. |
 | `tables` | integer | How many tables the room has (1 to 8). |
@@ -122,12 +124,12 @@ the order for anything else.
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `name` | string | The name as the room shows it (see Names). |
-| `country` | string or `null` | ISO 3166-1 alpha-2 code ("DE", "JP") of the country of the player's connection, looked up by the rooms server in DB-IP's database. `null` when unknown, or when the player turned **Country flag** off in SFVR's settings. A VPN shows its exit's country. Never anything the game itself claims. |
+| `country` | string or `null` | ISO 3166-1 alpha-2 code ("DE", "JP") of the country of the player's connection, looked up by the rooms server in DB-IP's database. `null` when unknown, or when the player turned **Country flag** off in Polarity's settings. A VPN shows its exit's country. Never anything the game itself claims. |
 | `face` | string or `null` | The character code the player picked in **My character** (`null`: none yet). `ELV` for Eleven (the fighter it rolls is never shown). |
 
 ### Names
 
-- Names are what players set in SFVR (or their Steam name), in UTF-8, up to
+- Names are what players set in Polarity (or their Steam name), in UTF-8, up to
   96 bytes, any script: display them as text, never as HTML.
 - In public rooms the word filter applies: a name on the server's word list
   appears as `Player` and a number ("Player 4821"), the same number for that
@@ -155,7 +157,7 @@ the order for anything else.
 | `totals.in_public_rooms` | integer | The members of all listed rooms (the sum of their `members`). |
 | `totals.public_rooms` | integer | How many rooms are listed (the length of `/v1/rooms`' `rooms`). |
 
-Totals cover every SFVR version. Nothing else about private rooms is ever
+Totals cover every Polarity version. Nothing else about private rooms is ever
 published: not their number, codes or members.
 
 ## Errors
@@ -291,7 +293,7 @@ next. Three players take turns whoever wins.
 
 ## Compatibility
 
-- Within version 1, fields may be **added** (like `sfvr_version` in 0.3.0),
+- Within version 1, fields may be **added** (like `sfvr_version` in 0.3.0 and `client_version` in 0.4.0),
   never renamed, removed or retyped. Ignore fields you do not know.
 - A value's meaning may grow (a new title id, a new character code, a new
   rules field): handle unknown values gracefully (show the raw value, or

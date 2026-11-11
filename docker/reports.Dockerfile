@@ -1,4 +1,4 @@
-# sfvr-reports (deploy/sfvr-reports.py): SFVR games' desync and crash
+# polarity-reports (deploy/sfvr-reports.py): Polarity games' desync and crash
 # reports, received on TCP ${REPORTS_PORT} (5580). Python's standard library
 # only. The reports and crashes are the host's folders
 # (/var/lib/sfvr-server/reports and crashes, compose.yaml), so they are read,

@@ -1,8 +1,9 @@
 apiVersion: 1
 providers:
   # monitoring/dashboards/*.json (make-dashboards.py writes them).
+  # The provider keeps its name (Grafana files the dashboards under it).
   - name: sfvr
-    folder: SFVR
+    folder: Polarity
     type: file
     disableDeletion: true
     allowUiUpdates: false

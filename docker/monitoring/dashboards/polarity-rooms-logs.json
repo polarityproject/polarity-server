@@ -1,9 +1,9 @@
 {
   "uid": "sfvr-rooms-logs",
-  "title": "SFVR rooms logs",
+  "title": "Polarity rooms logs",
   "description": "Every container's log and the host's journal (Loki, 14 days).",
   "tags": [
-    "sfvr"
+    "polarity"
   ],
   "timezone": "browser",
   "schemaVersion": 39,
@@ -35,10 +35,10 @@
   },
   "links": [
     {
-      "title": "SFVR",
+      "title": "Polarity",
       "type": "dashboards",
       "tags": [
-        "sfvr"
+        "polarity"
       ],
       "asDropdown": true
     }

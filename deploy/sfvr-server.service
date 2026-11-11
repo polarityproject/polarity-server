@@ -1,8 +1,8 @@
-# sfvr-server: the Weyvelength rooms server for SFVR
+# sfvr-server: the Weyvelength rooms server for Polarity
 # (docs/server-vps.md). Rooms live in memory; matches run peer to peer, or
 # through Cloudflare's TURN relay with the credentials in the ice file.
 [Unit]
-Description=sfvr-server, rooms for SFVR (Weyvelength)
+Description=sfvr-server, rooms for Polarity (Weyvelength)
 After=network-online.target sfvr-server-ice.service
 Wants=network-online.target
 

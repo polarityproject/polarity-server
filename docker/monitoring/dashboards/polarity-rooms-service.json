@@ -1,9 +1,9 @@
 {
   "uid": "sfvr-rooms-service",
-  "title": "SFVR rooms service",
+  "title": "Polarity rooms service",
   "description": "The keeper (tables, rooms, relays) and the rooms publisher, from the keeper's metrics file.",
   "tags": [
-    "sfvr"
+    "polarity"
   ],
   "timezone": "browser",
   "schemaVersion": 39,
@@ -23,10 +23,10 @@
   },
   "links": [
     {
-      "title": "SFVR",
+      "title": "Polarity",
       "type": "dashboards",
       "tags": [
-        "sfvr"
+        "polarity"
       ],
       "asDropdown": true
     }

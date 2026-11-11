@@ -1,11 +1,11 @@
 #!/bin/sh
-# Installs (or updates) sfvr-server, SFVR's rooms server
-# (Weyvelength), on a Debian or Ubuntu VPS, with Cloudflare TURN when
+# Installs (or updates) Polarity's rooms server (Weyvelength) on a Debian or
+# Ubuntu VPS, with Cloudflare TURN when
 # /etc/sfvr-server/cloudflare.env has a key. Everything it adds is named
 # sfvr-server (user, services, /opt, /etc and /var/lib folders), so other
 # servers can share the machine; uninstall.sh removes it again.
 # Run as root from this folder: sudo sh install.sh
-# Guide: docs/server-vps.md in the sfvr-server repository.
+# Guide: docs/server-vps.md in the polarity-server repository.
 set -eu
 
 NAME=sfvr-server
