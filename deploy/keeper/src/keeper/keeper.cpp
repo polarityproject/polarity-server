@@ -851,6 +851,26 @@ std::vector<ListedRoom> Keeper::PublicList() const
         uint32_t len = 0;
         const char* rules = weyve_room_data(r->client, TableKey(0).c_str(), &len);
         l.rules = rules ? Str(rules, len) : FormatRules(Rules{});
+        // Each table: its rules, phase and seats (the API's per-table view).
+        for (const Table& t : r->tables) {
+            ListedRoom::TableEntry e;
+            e.rules = FormatRules(t.rules);
+            switch (t.s.phase) {
+            case TablePhase::Open: e.state = "open"; break;
+            case TablePhase::Call: e.state = "called"; break;
+            case TablePhase::Connecting: e.state = "connecting"; break;
+            case TablePhase::Playing: e.state = "playing"; break;
+            case TablePhase::After: e.state = "after"; break;
+            }
+            for (int i = 0; i < 2; i++) {
+                const uint32_t id = t.s.seat[i];
+                const auto m = id ? r->members.find(id) : r->members.end();
+                if (m == r->members.end()) continue;
+                e.seat[i] = {ShownName(*r, id), m->second.country, m->second.chara};
+                e.wins[i] = t.s.wins[i];
+            }
+            l.tableList.push_back(std::move(e));
+        }
         for (uint32_t id : r->order) {
             const auto m = r->members.find(id);
             if (m == r->members.end()) continue;

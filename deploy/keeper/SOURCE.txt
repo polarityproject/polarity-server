@@ -1,1 +1,1 @@
-polarity-keeper sources from polarity-client 2e95f88, 2026-11-10 22:03
+polarity-keeper sources from polarity-client be4a2c9, 2026-11-11 17:40

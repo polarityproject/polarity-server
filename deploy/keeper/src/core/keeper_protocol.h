@@ -151,6 +151,17 @@ struct ListedRoom {
         bool operator==(const Player&) const = default;
     };
     std::vector<Player> players;
+    // Every table, for the rooms API only: its rules (the next set's), what
+    // it is doing, and who sits at it (P1, P2; an empty name: an open seat)
+    // with the running set's score.
+    struct TableEntry {
+        std::string rules;   // FormatRules
+        std::string state;   // "open", "called", "connecting", "playing", "after"
+        Player seat[2];
+        int wins[2] = {0, 0};
+        bool operator==(const TableEntry&) const = default;
+    };
+    std::vector<TableEntry> tableList;
     bool operator==(const ListedRoom&) const = default;
 };
 // Rooms with open seats first, then full tables with room to queue, then

@@ -509,15 +509,36 @@ std::string FormatRoomListJson(const std::vector<ListedRoom>& rooms, const RoomT
             if (s.empty()) out += "null";
             else JsonString(out, s);
         };
+        auto player = [&](const ListedRoom::Player& p) {
+            out += "{\"name\":";
+            JsonString(out, p.name);
+            out += ",\"country\":";
+            orNull(p.country);
+            out += ",\"face\":";
+            orNull(p.face);
+            out += '}';
+        };
         for (size_t p = 0; p < r.players.size(); p++) {
             if (p) out += ',';
-            out += "{\"name\":";
-            JsonString(out, r.players[p].name);
-            out += ",\"country\":";
-            orNull(r.players[p].country);
-            out += ",\"face\":";
-            orNull(r.players[p].face);
-            out += '}';
+            player(r.players[p]);
+        }
+        // Every table: its rules, state, seats (P1, P2; null open) and the
+        // running set's score. "rules" above stays the first table's.
+        out += "],\"table_list\":[";
+        for (size_t t = 0; t < r.tableList.size(); t++) {
+            const ListedRoom::TableEntry& e = r.tableList[t];
+            if (t) out += ',';
+            out += "{\"table\":" + std::to_string(t + 1) + ",\"rules\":";
+            JsonString(out, e.rules);
+            out += ",\"state\":";
+            JsonString(out, e.state);
+            out += ",\"seats\":[";
+            for (int i = 0; i < 2; i++) {
+                if (i) out += ',';
+                if (e.seat[i].name.empty()) out += "null";
+                else player(e.seat[i]);
+            }
+            out += "],\"score\":[" + std::to_string(e.wins[0]) + "," + std::to_string(e.wins[1]) + "]}";
         }
         out += "]}";
     }
