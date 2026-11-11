@@ -20,6 +20,10 @@ must match the mod's (see the README). Newest first; the format follows
   and rules tables).
 - The rooms API's rooms carry `sfvr_version`, the SFVR version each room
   plays.
+- The rooms API's rooms carry `table_list`: every table's rules, state
+  (open, called, connecting, playing, after), its two seats and the running
+  set's score. `rules` stays table 1's, for tools written before. Needs the
+  keeper built from the mod at this version; older keepers leave it out.
 
 ### Changed
 

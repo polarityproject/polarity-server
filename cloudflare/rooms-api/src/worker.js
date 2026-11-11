@@ -10,7 +10,8 @@
 //
 // A room: {code, title, title_id, title_characters, owner, client_version,
 // sfvr_version (the same, for readers older than 0.4.0), members, capacity,
-// tables, open_seats, rules, faces, players: [{name, country, face}]}.
+// tables, open_seats, rules, faces, players: [{name, country, face}],
+// table_list: [{table, rules, state, seats: [player or null, x2], score}]}.
 // `title`: the English of SFV's Battle Lounge comment the owner picked (null:
 // none, show the owner's name). country is the rooms server's lookup of the
 // player's address in DB-IP's free database (null when unknown); whoever

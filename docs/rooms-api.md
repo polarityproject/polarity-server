@@ -79,6 +79,25 @@ For the true age, use `updated` against your own clock.
         {"name": "POLARITYDEV", "country": "DE", "face": "RYU"},
         {"name": "Player 4821", "country": "FR", "face": "KEN"},
         {"name": "DECK", "country": null, "face": null}
+      ],
+      "table_list": [
+        {
+          "table": 1,
+          "rules": "r1 ft2 bo3 t99 ws3",
+          "state": "playing",
+          "seats": [
+            {"name": "POLARITYDEV", "country": "DE", "face": "RYU"},
+            {"name": "Player 4821", "country": "FR", "face": "KEN"}
+          ],
+          "score": [1, 0]
+        },
+        {
+          "table": 2,
+          "rules": "r1 ft3 bo3 t99 rr",
+          "state": "open",
+          "seats": [null, null],
+          "score": [0, 0]
+        }
       ]
     }
   ]
@@ -110,9 +129,10 @@ A tool that does not show countries does not need it.
 | `capacity` | integer | The most a room holds: `16`. |
 | `tables` | integer | How many tables the room has (1 to 8). |
 | `open_seats` | integer | Seats nobody sits in, over all tables whose set has not been called (0 to `2 × tables`). `0` with room left (`members < capacity`) means every seat is taken but players can still join and queue or watch. |
-| `rules` | string | The first table's rules (see Rules). Other tables may differ; the API shows only the first. |
+| `rules` | string | The first table's rules (see Rules). Every table's are in `table_list`. |
 | `faces` | array of strings | Up to six character codes, of members in join order, for a quick strip of faces. Members with no character chosen yet are skipped. |
 | `players` | array of objects | Every member, in join order (see below). |
+| `table_list` | array of objects | Every table, in order (see A table). New in 0.4.0; absent from a keeper before it. |
 
 **Order.** Rooms come sorted as the game's list sorts them: rooms with open
 seats first, then rooms whose tables are full but which have room to join,
@@ -126,6 +146,16 @@ the order for anything else.
 | `name` | string | The name as the room shows it (see Names). |
 | `country` | string or `null` | ISO 3166-1 alpha-2 code ("DE", "JP") of the country of the player's connection, looked up by the rooms server in DB-IP's database. `null` when unknown, or when the player turned **Country flag** off in Polarity's settings. A VPN shows its exit's country. Never anything the game itself claims. |
 | `face` | string or `null` | The character code the player picked in **My character** (`null`: none yet). `ELV` for Eleven (the fighter it rolls is never shown). |
+
+### A table
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `table` | integer | Its number as the room shows it (from 1). |
+| `rules` | string | The rules its next set plays (see Rules). The owner can change them; a set already called keeps the rules it was called with. |
+| `state` | string | `open` (seats open or players waiting to be called), `called` (both players asked to get ready), `connecting` (their match is starting), `playing` (a set is on), `after` (a set just ended). |
+| `seats` | array of two | P1's and P2's seat: a player (as in A player), or `null` when the seat is open. |
+| `score` | array of two integers | The running set's games won by P1 and P2; `[0, 0]` outside a set. |
 
 ### Names
 
