@@ -62,6 +62,13 @@ must match the mod's (see the README). Newest first; the format follows
 
 ### Fixed
 
+- A player whose network went away without closing the connection (a phone
+  hotspot or carrier NAT taking a new address) stayed a member of their room
+  for 15 minutes or more after coming back: the room showed them twice,
+  tables called the dead one and could hand it the room. The server now
+  turns on TCP keepalive (`weyvelength-keepalive.patch`) and drops such a
+  connection about 50 s after it goes quiet, logging "Client N stopped
+  answering (keepalive); dropping it". No client change.
 - The rooms server could be crashed by anyone who reached its port: a
   malformed message of a few bytes claiming gigabytes made it allocate them
   until the kernel killed it (three times on the rooms VPS, 2026-11-07).

@@ -12,6 +12,8 @@ FROM ubuntu:24.04 AS build
 # "nocc"=1 keeps theirs hidden), and its counts for the keeper (--stats).
 # deploy/weyvelength-decode-limit.patch (the mod's third_party copy) caps
 # what decoding one message may allocate, on both ends.
+# deploy/weyvelength-keepalive.patch (server only) drops a client whose
+# network went away without closing its connection within about a minute.
 ARG WEYVELENGTH_COMMIT=d4e25c7da7aab18ff82d60d275ea95f794bb2ec9
 RUN apt-get update \
  && apt-get install -y --no-install-recommends build-essential cmake git ca-certificates libmaxminddb-dev \
@@ -19,8 +21,10 @@ RUN apt-get update \
 RUN git clone --quiet https://github.com/HeatXD/Weyvelength.git /src \
  && git -C /src checkout --quiet "$WEYVELENGTH_COMMIT" \
  && git -C /src submodule update --init --recursive --quiet
-COPY docker/weyvelength-geoip.patch deploy/weyvelength-decode-limit.patch /tmp/
-RUN git -C /src apply /tmp/weyvelength-geoip.patch  && git -C /src apply /tmp/weyvelength-decode-limit.patch
+COPY docker/weyvelength-geoip.patch deploy/weyvelength-decode-limit.patch deploy/weyvelength-keepalive.patch /tmp/
+RUN git -C /src apply /tmp/weyvelength-geoip.patch \
+ && git -C /src apply /tmp/weyvelength-decode-limit.patch \
+ && git -C /src apply /tmp/weyvelength-keepalive.patch
 RUN cmake -S /src -B /src/build -DCMAKE_BUILD_TYPE=Release -DWEYVELENGTH_BUILD_TESTS=OFF >/dev/null \
  && cmake --build /src/build --target Server -j "$(nproc)"
 

@@ -47,6 +47,9 @@ git -C "$SRC" submodule update --init --recursive --quiet
 # claiming gigabytes run the server out of memory (the mod's copy is
 # third_party/weyvelength-decode-limit.patch).
 git -C "$SRC" apply "$HERE/weyvelength-decode-limit.patch"
+# Dead connections dropped within about a minute (TCP keepalive): a client
+# whose network went away silently stayed in its room for 15 minutes or more.
+git -C "$SRC" apply "$HERE/weyvelength-keepalive.patch"
 cmake -S "$SRC" -B "$SRC/build" -DCMAKE_BUILD_TYPE=Release -DWEYVELENGTH_BUILD_TESTS=OFF >/dev/null
 cmake --build "$SRC/build" --target Server -j "$(nproc)"
 
