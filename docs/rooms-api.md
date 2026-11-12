@@ -12,11 +12,11 @@ is deployed is in `docs/rooms-vps-docker.md`, "Rooms API".
 ## Base URL
 
 ```
-https://polarity-rooms-api.<account>.workers.dev
+https://api.polaritymod.link
 ```
 
-This is the Worker's own address. A custom domain may be put in front of it
-later; tools should keep the base URL in one setting.
+The Worker's own address, `https://polarity-rooms-api.<account>.workers.dev`,
+answers the same. Tools should keep the base URL in one setting.
 
 ## At a glance
 

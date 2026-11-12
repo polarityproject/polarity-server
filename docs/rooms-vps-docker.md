@@ -374,7 +374,7 @@ The full specification for tool builders (every field, errors, caching,
 reference tables) is `docs/rooms-api.md`; this section is about running it.
 
 ```
-GET https://polarity-rooms-api.<your account>.workers.dev/v1/rooms
+GET https://api.polaritymod.link/v1/rooms
 {"version":1,"updated":1793992354396,"age":4,"stale":false,
  "attribution":"IP Geolocation by DB-IP (https://db-ip.com), CC BY 4.0",
  "rooms":[{"code":"4SLJEV","title":"Karin user looking for M. Bison!","title_id":3,
@@ -426,7 +426,10 @@ GET .../v1/summary
 ### Deploy it
 
 On your PC, with Node and a Cloudflare login (`npx wrangler login`), from
-`polarity-server/cloudflare/rooms-api`:
+`polarity-server/cloudflare/rooms-api`. The Worker is served at
+`api.polaritymod.link` (`routes` in `wrangler.toml`), so the
+`polaritymod.link` zone must be in the same Cloudflare account first; deploy
+makes the DNS record and the certificate.
 
 ```powershell
 node test.mjs
@@ -436,17 +439,16 @@ npx wrangler deploy
 ```
 
 `secret put` asks for the value: paste what `sudo cat secrets/rooms_push`
-prints on the VPS. `deploy` prints the Worker's address. On the VPS, put it in
-`monitoring.env`:
+prints on the VPS. `deploy` prints both of the Worker's addresses. On the
+VPS, put the custom one in `monitoring.env`:
 
 ```
-ROOMS_API_URL=https://polarity-rooms-api.<your account>.workers.dev
+ROOMS_API_URL=https://api.polaritymod.link
 ```
 
 then `dc up -d publisher` (with the alias above) and, after 10 s,
-`dc logs publisher` and the address's `/v1/summary` in a browser. A custom
-domain (`rooms.example.com`) can be added in the Worker's settings later
-without changing anything else.
+`dc logs publisher` and the address's `/v1/summary` in a browser. The
+workers.dev address answers the same, for readers that still use it.
 
 To change the secret: a new `secrets/rooms_push`, `npx wrangler secret put
 PUSH_SECRET` with it, `dc up -d --force-recreate publisher`.

@@ -24,6 +24,9 @@ must match the mod's (see the README). Newest first; the format follows
   (open, called, connecting, playing, after), its two seats and the running
   set's score. `rules` stays table 1's, for tools written before. Needs the
   keeper built from the mod at this version; older keepers leave it out.
+- The rooms API Worker is served at `https://api.polaritymod.link` (a
+  custom domain in `wrangler.toml`); its workers.dev address keeps
+  answering.
 
 ### Changed
 
