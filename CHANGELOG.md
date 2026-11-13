@@ -6,7 +6,13 @@ with the mod builds that speak its Weyvelength protocol: the pinned commit
 must match the mod's (see the README). Newest first; the format follows
 [Keep a Changelog](https://keepachangelog.com).
 
-## [Unreleased]
+## [0.2.0] - 2026-11-12
+
+Polarity's rooms server: the custom rooms stack in Docker on its own VPS,
+with monitoring, the desync and crash reports service and the public rooms
+API at api.polaritymod.link; rooms per client version; and fixes for a
+crash from malformed messages and for players who stayed in their room
+after their connection died.
 
 ### Added
 
