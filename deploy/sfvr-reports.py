@@ -16,8 +16,8 @@
 # (--max-crashes-mb) the oldest folders are removed. GET /v1/health answers
 # "ok".
 #
-# Settings come from /etc/sfvr-server/server.env (sfvr-reports.service; the
-# deployment keeps its SFVR names):
+# Settings come from the environment (docker/compose.yaml; the deployment
+# keeps its SFVR names):
 # SFVR_REPORTS_PORT, SFVR_REPORTS_MAX_MB, SFVR_CRASHES_MAX_MB. Standard
 # library only.
 import argparse

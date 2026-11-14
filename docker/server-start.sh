@@ -5,7 +5,7 @@
 set -eu
 ICE=/data/ice.conf
 if [ ! -f "$ICE" ]; then
-	printf '# STUN only until Cloudflare TURN is set up (docs/rooms-vps-docker.md)\nstun stun.cloudflare.com 3478\n' > "$ICE"
+	printf '# STUN only until Cloudflare TURN is set up (docs/install.md)\nstun stun.cloudflare.com 3478\n' > "$ICE"
 	chmod 0640 "$ICE"
 fi
 # 6-character room codes: the mod's match codes. Members' countries from the

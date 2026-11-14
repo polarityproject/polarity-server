@@ -7,7 +7,7 @@ document is the contract such tools can rely on.
 
 It is served by a Cloudflare Worker (`cloudflare/rooms-api/src/worker.js`)
 from a copy the rooms VPS pushes to it; tools never talk to the VPS. How it
-is deployed is in `docs/rooms-vps-docker.md`, "Rooms API".
+is deployed is in `docs/install.md`, "Rooms API".
 
 ## Base URL
 

@@ -2,7 +2,7 @@
 #   npx wrangler r2 bucket create polarity-rooms
 #   npx wrangler secret put PUSH_SECRET      (the VPS's secrets/rooms_push)
 #   npx wrangler deploy
-# docs/rooms-vps-docker.md, "Rooms API", has the whole setup.
+# docs/install.md, "Rooms API", has the whole setup.
 name = "polarity-rooms-api"
 main = "src/worker.js"
 compatibility_date = "2024-11-01"

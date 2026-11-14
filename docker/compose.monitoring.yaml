@@ -1,4 +1,4 @@
-# The rooms VPS's monitoring, beside compose.yaml (docs/rooms-vps-docker.md,
+# The rooms VPS's monitoring, beside compose.yaml (docs/install.md,
 # "Monitoring"):
 #   docker compose -f compose.yaml -f compose.monitoring.yaml up -d --build
 #
@@ -145,7 +145,7 @@ services:
     depends_on: [keeper]
 
 secrets:
-  # Made once (docs/rooms-vps-docker.md, "Monitoring"):
+  # Made once (docs/install.md, "Monitoring"):
   #   openssl rand -base64 24 > secrets/grafana_admin
   #   openssl rand -hex 32 > secrets/rooms_push   (the same value goes into the Worker)
   grafana_admin: {file: ./secrets/grafana_admin}

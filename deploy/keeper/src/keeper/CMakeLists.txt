@@ -15,7 +15,7 @@ get_filename_component(POLARITY_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUT
 
 include(FetchContent)
 # The same Weyvelength commit and client patches as the mod (and as the
-# server's install.sh COMMIT).
+# server's docker/server.Dockerfile WEYVELENGTH_COMMIT).
 FetchContent_Declare(weyvelength
   GIT_REPOSITORY https://github.com/HeatXD/Weyvelength.git
   GIT_TAG d4e25c7da7aab18ff82d60d275ea95f794bb2ec9

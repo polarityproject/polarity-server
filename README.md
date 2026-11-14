@@ -34,9 +34,9 @@ published room list to the website, the Discord bot and other tools.
 | Path | What it is |
 | --- | --- |
 | `docker/` | the compose files, Dockerfiles, settings examples (`env.example`, `monitoring.env.example`) and the monitoring setup |
-| `deploy/` | what the images build from: the keeper's sources (bundled from the client by its `scripts/keeper-bundle.ps1`), the Weyvelength patches, the reports service; also the older systemd install (`install.sh`) |
+| `deploy/` | what the images build from: the keeper's sources (bundled from the client by its `scripts/keeper-bundle.ps1`), the Weyvelength patches, the reports service (`sfvr-reports.py`, `collect-reports.py`), and the host's firewall scripts (`connection-limit.sh`, `port-443.sh`) |
 | `cloudflare/rooms-api/` | the rooms API Worker and its tests |
-| `docs/rooms-vps-docker.md` | the full guide: a fresh VPS, the stack, monitoring, the rooms API, reports, updating |
+| `docs/install.md` | the full guide: a fresh VPS, the stack, monitoring, the rooms API, reports, updating and day-to-day running |
 | `docs/rooms-api.md` | the rooms API's specification, for tool builders |
 
 Secrets stay on the VPS and out of git: the keeper's signing key

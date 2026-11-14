@@ -14,7 +14,7 @@ BEGIN='# sfvr-server: TCP 443 to the rooms server (port-443.sh)'
 END='# sfvr-server: end'
 
 if [ "$(id -u)" -ne 0 ]; then echo "run as root (sudo sh port-443.sh)"; exit 1; fi
-if [ ! -f "$RULES" ]; then echo "$RULES not found: this needs ufw (docs/server-vps.md, step 1)"; exit 1; fi
+if [ ! -f "$RULES" ]; then echo "$RULES not found: this needs ufw (docs/install.md, step 3)"; exit 1; fi
 
 PORT=5555
 if [ -f /etc/sfvr-server/server.env ]; then

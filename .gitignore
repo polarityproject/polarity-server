@@ -5,3 +5,5 @@ docker/secrets/
 docker/keeper-words.txt
 # Wrangler's local state (cloudflare/rooms-api).
 .wrangler/
+# git archive bundles made for copying to the VPS.
+*.tgz

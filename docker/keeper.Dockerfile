@@ -1,7 +1,7 @@
 # polarity-keeper (custom rooms' tables and moderation) in a container: a client
 # of the rooms server beside it. Built on the VPS by compose.yaml from the
 # sources in deploy/keeper (the mod repository's scripts/keeper-bundle.ps1
-# copies them there); the guide is docs/rooms-vps-docker.md.
+# copies them there); the guide is docs/install.md.
 
 FROM ubuntu:24.04 AS build
 RUN apt-get update \

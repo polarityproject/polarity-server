@@ -6,6 +6,14 @@ with the mod builds that speak its Weyvelength protocol: the pinned commit
 must match the mod's (see the README). Newest first; the format follows
 [Keep a Changelog](https://keepachangelog.com).
 
+## [Unreleased]
+
+### Removed
+
+- The systemd install (`deploy/install.sh` and its units, the keeper's
+  `install-keeper.sh`) and its guide, `docs/server-vps.md`: the server runs
+  only as the Docker stack. Its guide is now `docs/install.md`.
+
 ## [0.2.0] - 2026-11-12
 
 Polarity's rooms server: the custom rooms stack in Docker on its own VPS,

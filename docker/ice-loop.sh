@@ -1,6 +1,6 @@
 #!/bin/sh
-# Cloudflare TURN credentials for the rooms server, in its own container
-# (the systemd install's sfvr-server-ice timer): a fresh batch every 6 hours
+# Cloudflare TURN credentials for the rooms server, in its own container:
+# a fresh batch every 6 hours
 # (they last CF_TURN_TTL, 24 h by default), into the ice file the server
 # rereads. A failed run writes nothing (the server keeps what it has) and is
 # tried again in 10 minutes. Without a key: STUN only, and this waits.

@@ -1,11 +1,11 @@
 # polarity-server's rooms server (Weyvelength) in a container, and beside it the
 # Cloudflare TURN minter (ice-loop.sh) and the DB-IP country database's
 # monthly download (geoip-loop.sh), the same image. Built on the VPS by
-# compose.yaml; the guide is docs/rooms-vps-docker.md.
+# compose.yaml; the guide is docs/install.md.
 
 FROM ubuntu:24.04 AS build
 # Keep in step with the mod repository's CMakeLists.txt (FetchContent
-# weyvelength) and deploy/install.sh: the server and the clients speak the
+# weyvelength) and src/keeper/CMakeLists.txt: the server and the clients speak the
 # protocol of the same commit. The mod's patches only change the client; this
 # image's own patch (weyvelength-geoip.patch) only the server: members'
 # countries from their addresses (--geoip, member data "@cc"; a member's

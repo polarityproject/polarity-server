@@ -490,41 +490,6 @@ dc run --rm -v ~:/out --entrypoint python3 reports /usr/local/bin/collect-report
   --reports-dir /reports --crashes-dir /crashes --crashes --out /out
 ```
 
-## Moving to 0.3.0
-
-At 0.3.0 this VPS becomes Polarity's server: 0.3.0's defaults are this
-address for the rooms server (5555, and 443) and for reports (5580), and
-its built-in keeper key is this keeper's. Updates stay on the website.
-
-1. **A new keeper key**, made here and never copied off except to a backup
-   (the one in use since 2026-11-04 was a test key that also lives on a PC):
-   ```bash
-   sudo mv secrets/keeper.key secrets/keeper.key.test
-   sudo docker run --rm -v "$PWD/secrets:/out" sfvr-rooms/keeper:latest --new-key /out/keeper.key
-   sudo chmod 0400 secrets/keeper.key
-   dc up -d --force-recreate keeper
-   ```
-   Its public half (printed) goes into the mod's `kKeeperPublicKey`
-   (`src/mod/rooms_client.cpp`) before 0.3.0 is built. Rooms builds until
-   then need `[rooms] keeper_key=<the new public half>` in their ini.
-2. **The reports container** (above): the folders (step 6), ufw 5580, `dc up
-   -d --build reports`.
-3. **The reports already on the main VPS**, once, so nothing is lost:
-   ```bash
-   # on the main VPS
-   sudo tar -czf ~/main-reports.tgz -C /var/lib/sfvr-server reports crashes
-   # on your PC
-   scp polarityadmin@203.0.113.20:~/main-reports.tgz .
-   scp main-reports.tgz polarityadmin@203.0.113.10:~
-   # here
-   sudo tar -xzf ~/main-reports.tgz -C /var/lib/sfvr-server
-   sudo chown -R 10001:10001 /var/lib/sfvr-server/reports /var/lib/sfvr-server/crashes
-   ```
-4. **The main VPS stays up for 0.2.x** until players have updated: 0.2.x
-   builds keep playing and sending reports there (they only learn the new
-   address from 0.3.0). Collect its reports now and then until it is
-   switched off.
-
 ## Updating
 
 | What | How | Effect on players |
@@ -534,7 +499,7 @@ its built-in keeper key is this keeper's. Updates stay on the website.
 | Security fixes in the images | `sudo docker compose build --pull && sudo docker compose up -d` (monthly, or after an Ubuntu advisory) | the server restarts: rooms and matches end |
 | Cloudflare key | edit `cloudflare.env`, then `sudo docker compose up -d ice` | none |
 | The country database | nothing: `geoip` fetches each month's on its own (`dc logs geoip`), and the server reopens it | none |
-| Weyvelength commit | change it in `docker/server.Dockerfile`, `deploy/install.sh`, the mod's `CMakeLists.txt` and `src/keeper/CMakeLists.txt` together | needs a mod release |
+| Weyvelength commit | change it in `docker/server.Dockerfile`, the client's `CMakeLists.txt` and `src/keeper/CMakeLists.txt` together | needs a mod release |
 
 Old images pile up after rebuilds: `sudo docker image prune -f`.
 
@@ -569,69 +534,3 @@ the dashboards show the same logs for 14 days ([Monitoring](#monitoring)).
   (fixed in `connection-limit.sh` on 2026-11-06; `sudo sh connection-limit.sh`
   again replaces an older rule); long steps without that are CPU (the VPS
   dashboard's steal and the keeper's CPU) or log writing.
-
-## Tested
-
-2026-11-06, the reports container in Docker on a Windows PC (its folders on
-the PC): healthy (`/v1/health`, Docker's check, `sfvr_container_healthy` in
-Prometheus); a desync recording and its log filed under their match id; a
-name it does not take refused (400), a 17 MB file refused (413), past 120
-files an hour from one address refused (429); a real crash from the game
-(`crash thread`) sent at its next start, log and minidump filed under the
-day; `collect-reports.py` run in the container (the `dc run` form) packed
-the 237 files of 117 folders into one zip and cleared them. The host form
-(`sudo python3 ... collect-reports.py`) is the same script as before the
-stack, on the VPS's own Python.
-
-2026-11-06, players' countries (`weyvelength-geoip.patch`, `geoip`) in Docker on a
-Windows PC: the server built with libmaxminddb and the patch, `geoip` fetched
-November's DB-IP file (8.5 MB) and the server opened it; three bots in a public
-room were listed with the test country (`GEOIP_PRIVATE`, their addresses being
-private there); a bot setting `@cc` itself was refused (room error 4) and kept
-the server's; the file gives 8.8.8.8 US, a German host DE, a Japanese JP. Real
-addresses are first looked up on the VPS.
-
-2026-11-06, the monitoring on a Windows PC with Docker Desktop
-(`compose.local.monitoring.yaml`):
-
-- Every container up, Prometheus scraping all seven targets, the 12 alert
-  rules loaded, the three dashboards provisioned; the publisher pushing to the
-  Worker's code run in Node (`cloudflare/rooms-api/test.mjs` also passes); a
-  host-network container's log in Loki with its `service` label. The
-  monitoring used about 260 MB idle.
-- Found: cAdvisor (0.49.1 to 0.53.0) cannot place containers when Docker
-  keeps images in containerd (Docker 29's default): `container-stats` reads
-  the Docker API instead.
-- 112 bots, sets every 2.5 s: the keeper's longest step 2.2 ms, its loop 4 %
-  busy, log writing under 0.1 %, 16 MB, 1,064 tickets, no resends.
-- **The VPS slowdown, reproduced and fixed**: the connection limit's rule on
-  the loopback too (as `connection-limit.sh` put it, above ufw's loopback
-  accept), 48 bots: a new room 17–36 s, a keeper step up to 24.6 s, 122 s of
-  its loop waiting on connects (one per room and per set's relay room, about
-  110 a minute here). Without it: 0.4–0.5 s, 1.5 ms, 0.03 s, four times the
-  tickets.
-
-2026-11-04, on a Windows PC with Docker Desktop:
-
-- **The stack** (`compose.local.yaml`, ports published): both images built
-  (the keeper's first Linux build); 0.2.x (main) and rooms builds played
-  Direct Match through the server with the keeper beside it (session.ps1 and
-  rematch-test.ps1: 4 matches each, 0 desyncs); two games played table sets
-  through the keeper; 22 bots ran 151 sets in 2 minutes over 10 tables, 0
-  missed calls, the keeper at 3.5 s of CPU and 7 MB.
-- **A stand-in VPS** (a privileged Ubuntu 24.04 container with its own
-  Docker): this guide's steps 3–9 as written, `git archive` copy included,
-  with host networking and ufw. Table sets on 5555 and on 443 (the redirect
-  counted the connections), 0 desyncs. The keeper updated mid-set (`up -d
-  --force-recreate keeper`): the room paused, the game handed it back, the
-  set finished and the table was called again. A server restart: the keeper
-  reconnected in 5 s with a new lobby channel. A bogus Cloudflare key: the
-  minter logged the failure and the server kept STUN. The name filter word
-  showed a matching name as "Player 3".
-- **Found and fixed**: `port-443.sh` redirected every TCP 443 connection,
-  also Docker containers' outgoing HTTPS, so image builds could not reach
-  GitHub; it now redirects only connections to the machine itself, and
-  replaces the older rule when run again.
-
-Not tried: a real VPS and its provider's firewall, internet NAT between
-players and the keeper, and minting with a real Cloudflare key.
