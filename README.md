@@ -55,3 +55,9 @@ The keeper's sources in `deploy/keeper/` are a copy of the client's
 ## Changes
 
 See [CHANGELOG.md](CHANGELOG.md).
+
+## Third-party material
+
+The Weyvelength patches, the word filter list, the game's own text and the
+libraries in the images keep their own licenses. See
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
