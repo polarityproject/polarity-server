@@ -8,7 +8,7 @@ main = "src/worker.js"
 compatibility_date = "2024-11-01"
 # Served at api.polaritymod.link (the polaritymod.link zone must be in the
 # same Cloudflare account; deploy makes the DNS record and certificate). The
-# workers.dev address stays on beside it, for the site's fallback.
+# workers.dev address stays on beside it, for tools that still use it.
 routes = [{ pattern = "api.polaritymod.link", custom_domain = true }]
 workers_dev = true
 
