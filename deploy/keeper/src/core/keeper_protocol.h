@@ -31,19 +31,19 @@ namespace sfv::keeper {
 
 // --- keys ---
 // Listing slots and room data of a presence room (the desk, a custom room).
-constexpr const char* kKind = "kind";     // "lobby" (the desk) or "custom"
+constexpr const char* kKind = "kind"; // "lobby" (the desk) or "custom"
 constexpr const char* kKindLobby = "lobby";
 constexpr const char* kKindCustom = "custom";
-constexpr const char* kBuild = "build";   // the lobby protocol (lobby::kProtocol)
+constexpr const char* kBuild = "build"; // the lobby protocol (lobby::kProtocol)
 // Member data: the player's Polarity version ("0.3.0"); room data: the room's,
 // its maker's. Players join only rooms of their own version (the netplay
 // check refuses other builds' matches anyway, after a whole handoff).
 constexpr const char* kVersion = "ver";
 constexpr size_t kVersionMax = 32;
-constexpr const char* kCount = "count";   // members, the keeper not counted (desk listing)
+constexpr const char* kCount = "count"; // members, the keeper not counted (desk listing)
 // Custom room data.
 constexpr const char* kOwner = "owner";   // the owner's member id
-constexpr const char* kTitle = "title";  // the room's title (FormatTitle)
+constexpr const char* kTitle = "title";   // the room's title (FormatTitle)
 constexpr const char* kPublic = "pub";    // "1" listed in the lobby, "0" by code only
 constexpr const char* kTables = "tables"; // 1..kMaxTables
 // t0..t7: each table's rules (FormatRules).
@@ -53,8 +53,8 @@ constexpr const char* kProof = "kp";
 constexpr const char* kRequest = "rq";
 constexpr const char* kAck = "ak";
 
-constexpr int kLobbyCap = 250;  // members of a desk (the lobby channel)
-constexpr int kRoomCap = 16;    // members of a custom room
+constexpr int kLobbyCap = 250; // members of a desk (the lobby channel)
+constexpr int kRoomCap = 16;   // members of a custom room
 constexpr int kMaxTables = 8;
 constexpr int kDefaultTables = 4;
 
@@ -68,9 +68,9 @@ bool Base64Decode(std::string_view text, std::vector<uint8_t>* out);
 // The roster as the select screen has it (Eleven left out), and each one's
 // name in English (the rooms API; the game's own are all capitals).
 constexpr int kCharacterCount = 45;
-const char* CharacterCode(int index);              // "RYU"; "" out of range
-int CharacterIndex(std::string_view code);         // -1 when not on the roster
-const char* CharacterName(std::string_view code);  // "Chun-Li"; "" when not on the roster
+const char* CharacterCode(int index);             // "RYU"; "" out of range
+int CharacterIndex(std::string_view code);        // -1 when not on the roster
+const char* CharacterName(std::string_view code); // "Chun-Li"; "" when not on the roster
 
 // --- room titles ---
 // SFV's Battle Lounge comments (the game's FixedPhraseCommentSpec table, by
@@ -84,15 +84,16 @@ struct RoomTitle {
     std::string chara[2]; // Id 3's characters (CharacterCode); empty otherwise
     bool operator==(const RoomTitle&) const = default;
 };
+
 constexpr int kTitleCount = 16;
-int TitleId(int index);                 // the index-th offered title's Id (form order); 0 out of range
-int TitleIndex(int id);                 // -1 when the Id is not offered
-int TitleCharacters(int id);            // how many characters it names (2 for 3, else 0)
-bool ValidTitle(const RoomTitle& title); // an offered Id with exactly its characters, each on the roster
-std::string FormatTitle(const RoomTitle& title);              // "5", "3,RYU,KEN"
-bool ParseTitle(std::string_view text, RoomTitle* out);       // valid titles only
-const char* TitleTemplate(int id);      // the English text with {common1}/{common2}; "" for 0 and unknown Ids
-std::string TitleText(const RoomTitle& title); // in English with the names; "" for no title
+int TitleId(int index);                                 // the index-th offered title's Id (form order); 0 out of range
+int TitleIndex(int id);                                 // -1 when the Id is not offered
+int TitleCharacters(int id);                            // how many characters it names (2 for 3, else 0)
+bool ValidTitle(const RoomTitle& title);                // an offered Id with exactly its characters, each on the roster
+std::string FormatTitle(const RoomTitle& title);        // "5", "3,RYU,KEN"
+bool ParseTitle(std::string_view text, RoomTitle* out); // valid titles only
+const char* TitleTemplate(int id);                      // the English text with {common1}/{common2}; "" for 0 and unknown Ids
+std::string TitleText(const RoomTitle& title);          // in English with the names; "" for no title
 
 // --- requests (member data `rq`) ---
 // "<seq>:<kind>[:<arg>]..."; args hold no ':'.
@@ -104,6 +105,7 @@ struct Request {
     std::string kind;
     std::vector<std::string> args;
 };
+
 std::string FormatRequest(const Request& request);
 bool ParseRequest(std::string_view text, Request* out);
 
@@ -112,6 +114,7 @@ struct RoomSettings {
     bool isPublic = true;
     RoomTitle title;
 };
+
 Request RoomRequest(uint32_t seq, const RoomSettings& settings);
 bool ParseRoomSettings(const Request& request, RoomSettings* out);
 
@@ -124,6 +127,7 @@ struct Answer {
     bool ok = false;
     std::string text;
 };
+
 std::string FormatAnswer(const Answer& answer);
 bool ParseAnswer(const uint8_t* data, size_t size, Answer* out);
 
@@ -134,14 +138,15 @@ std::string CleanCountry(std::string_view code);
 struct ListedRoom {
     std::string code;
     RoomTitle title;
-    std::string owner;       // the owner's name
+    std::string owner;        // the owner's name
     std::string ownerCountry; // the owner's ISO 3166 alpha-2 (member data `@cc`); "" unknown or hidden
-    int members = 0;         // the keeper not counted
+    int members = 0;          // the keeper not counted
     int tables = 1;
-    int openSeats = 0;       // seats nobody sits in, over all tables
-    std::string rules;       // the first table's (FormatRules)
+    int openSeats = 0;              // seats nobody sits in, over all tables
+    std::string rules;              // the first table's (FormatRules)
     std::vector<std::string> faces; // up to six character codes of members
-    std::string version;     // the room's Polarity version ("" from a keeper before versions)
+    std::string version;            // the room's Polarity version ("" from a keeper before versions)
+
     // Every member, in join order, for the rooms API only (FormatRoomListJson;
     // the lobby's keys have no room for them).
     struct Player {
@@ -150,20 +155,24 @@ struct ListedRoom {
         std::string face;    // the character code (member data `ch`); "" none
         bool operator==(const Player&) const = default;
     };
+
     std::vector<Player> players;
+
     // Every table, for the rooms API only: its rules (the next set's), what
     // it is doing, and who sits at it (P1, P2; an empty name: an open seat)
     // with the running set's score.
     struct TableEntry {
-        std::string rules;   // FormatRules
-        std::string state;   // "open", "called", "connecting", "playing", "after"
+        std::string rules; // FormatRules
+        std::string state; // "open", "called", "connecting", "playing", "after"
         Player seat[2];
         int wins[2] = {0, 0};
         bool operator==(const TableEntry&) const = default;
     };
+
     std::vector<TableEntry> tableList;
     bool operator==(const ListedRoom&) const = default;
 };
+
 // Rooms with open seats first, then full tables with room to queue, then
 // full rooms; the most members first within each.
 void SortRoomList(std::vector<ListedRoom>* rooms);
@@ -178,10 +187,10 @@ constexpr const char* kListingOwner = "o"; // "<country>|<owner's name>"
 constexpr const char* kListingSig = "s";   // the keeper's signature (base64) of ListingMessage
 // The desk (the lobby channel, joined only to ask the keeper for something)
 // is listed with kKind "lobby", kBuild, kCount and these two:
-constexpr const char* kDeskSummary = "r";  // FormatDeskSummary
+constexpr const char* kDeskSummary = "r"; // FormatDeskSummary
 // (kListingSig: the signature of DeskMessage). Players poll the desk's
 // listing and list the rooms again only when its revision moves.
-constexpr size_t kListingValueMax = 128;   // Weyvelength's listing value limit
+constexpr size_t kListingValueMax = 128; // Weyvelength's listing value limit
 using Listing = std::map<std::string, std::string>;
 // "c16/0.3.0": players list only their own protocol's and version's rooms
 // ("c16" for a room of no known version).
@@ -195,12 +204,14 @@ std::string ListingMessage(std::string_view code, const Listing& listing);
 // not a custom room of this protocol or they do not parse. Its version is
 // the kind's, whatever it is: players filter on it.
 bool ParseRoomListing(std::string_view code, const Listing& listing, uint16_t protocol, ListedRoom* out);
+
 // The desk's summary: its revision (up whenever a public room's listing
 // changes), the public rooms and the players in them.
 struct DeskSummary {
     uint64_t rev = 0;
     int publicRooms = 0;
     int players = 0;
+
     // The same per Polarity version (players see their own version's: they list
     // only its rooms). The desk's listing has no slot left (Weyvelength
     // allows 5), so they ride in this one, cut to fit its 128 bytes.
@@ -210,12 +221,14 @@ struct DeskSummary {
         int players = 0;
         bool operator==(const Version&) const = default;
     };
+
     std::vector<Version> versions;
     bool operator==(const DeskSummary&) const = default;
     // A version's counts: its own if listed, else none (or the totals when
     // the desk lists no versions: a keeper before them).
     DeskSummary For(std::string_view version) const;
 };
+
 // "<rev>|<rooms>|<players>[|<version>:<rooms>:<players>,...]"
 std::string FormatDeskSummary(const DeskSummary& summary);
 bool ParseDeskSummary(std::string_view text, DeskSummary* out);
@@ -231,6 +244,7 @@ struct RoomTotals {
     int inPublicRooms = 0; // members of the listed rooms
     int publicRooms = 0;   // listed
 };
+
 // {"version":1,"updated":<unix ms>,"totals":{"online":..,"in_public_rooms":..,
 // "public_rooms":..},"rooms":[{"code":..,
 // "title":"Beginners Welcome!"|null,"title_id":10,"title_characters":[..],"owner":..,"client_version":"0.4.0"|null,"sfvr_version": the same,
@@ -245,6 +259,7 @@ std::string FormatRoomListJson(const std::vector<ListedRoom>& rooms, const RoomT
 // mod checks before it sends.
 constexpr size_t kChatMaxChars = 200;
 size_t Utf8Length(std::string_view text); // in characters (code points)
+
 class ChatLimiter {
 public:
     // True if a message sent at `nowMs` is within the limits (and counts it).
@@ -274,14 +289,17 @@ private:
 struct RoomDetail {
     std::string code;
     std::vector<std::string> tables; // rules (FormatRules)
+
     struct Person {
         std::string name;
         std::string chara;
         std::string country; // ISO 3166 alpha-2; "" unknown or hidden
         bool operator==(const Person&) const = default;
     };
+
     std::vector<Person> people;
 };
+
 Request PeekRequest(uint32_t seq, std::string_view code);
 std::vector<std::string> PackRoomDetail(const RoomDetail& detail, size_t partBytes = 800);
 // One part: false if it is not one.
@@ -345,15 +363,20 @@ bool ParsePing(const uint8_t* data, size_t size, bool* pong, uint64_t* clockUs);
 // has the your-turn card and readies), Connecting (both ready: P1 hosts the
 // match room, the keeper hands out the tickets), Playing (the set runs in the
 // match room), After (the set ended: the after-set panels, then rotation).
-enum class TablePhase : char { Open = 'o', Call = 'c', Connecting = 'n', Playing = 'p', After = 'a' };
+enum class TablePhase : char { Open = 'o',
+                               Call = 'c',
+                               Connecting = 'n',
+                               Playing = 'p',
+                               After = 'a' };
+
 struct TableState {
     TablePhase phase = TablePhase::Open;
     uint32_t seat[2] = {0, 0}; // P1, P2 (0 open)
     bool ready[2] = {false, false};
-    uint8_t wins[2] = {0, 0};  // the running set's score
-    std::string code;          // the match room (Connecting, Playing)
-    uint32_t stayer = 0;       // who stayed on from the last set (keeps their seat)
-    int streak = 0;            // sets in a row the stayer has played here
+    uint8_t wins[2] = {0, 0}; // the running set's score
+    std::string code;         // the match room (Connecting, Playing)
+    uint32_t stayer = 0;      // who stayed on from the last set (keeps their seat)
+    int streak = 0;           // sets in a row the stayer has played here
     // The last set (After, and the room's stripe): its winner and loser, the score.
     uint32_t lastWinner = 0, lastLoser = 0;
     uint8_t lastScore[2] = {0, 0}; // winner's, loser's
@@ -371,6 +394,7 @@ struct TableState {
     bool again = false;
     bool operator==(const TableState&) const = default;
 };
+
 std::string StateKey(int table); // "s0"
 std::string QueueKey(int table); // "q0"
 std::string FormatTable(const TableState& s);
@@ -418,6 +442,7 @@ struct TableTicket {
     uint64_t token = 0; // the P2 seat's token (lobby.h Hello)
     std::string rules;  // FormatRules
 };
+
 std::string FormatTicket(const TableTicket& t);
 bool ParseTicket(std::string_view text, TableTicket* out);
 

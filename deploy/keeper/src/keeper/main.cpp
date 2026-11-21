@@ -38,27 +38,25 @@ uint64_t g_logLines = 0;
 double g_logSeconds = 0;
 
 void OnSignal(int) { g_stop = true; }
+
 std::atomic<bool> g_rereadWords{false};
 #ifdef SIGHUP
 void OnHangUp(int) { g_rereadWords = true; }
 #endif
 
 // The word filter's list (keeper_protocol ParseWordFile): one entry a line.
-std::vector<std::string> ReadWords(const std::string& path)
-{
+std::vector<std::string> ReadWords(const std::string& path) {
     std::ifstream in(path, std::ios::binary);
     std::stringstream text;
     text << in.rdbuf();
     return ParseWordFile(text.str());
 }
 
-int64_t NowMs()
-{
+int64_t NowMs() {
     return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
-void LogLine(const std::string& line)
-{
+void LogLine(const std::string& line) {
     const auto started = std::chrono::steady_clock::now();
     const auto now = std::chrono::system_clock::now();
     const std::time_t t = std::chrono::system_clock::to_time_t(now);
@@ -76,8 +74,7 @@ void LogLine(const std::string& line)
 }
 
 // Writes beside the file and renames over it (readers never see half a file).
-void WriteFileAtomically(const std::string& path, const std::string& text)
-{
+void WriteFileAtomically(const std::string& path, const std::string& text) {
     const std::string temp = path + ".tmp";
     {
         std::ofstream out(temp, std::ios::binary | std::ios::trunc);
@@ -90,8 +87,7 @@ void WriteFileAtomically(const std::string& path, const std::string& text)
     std::rename(temp.c_str(), path.c_str());
 }
 
-int Usage()
-{
+int Usage() {
     std::fprintf(stderr,
                  "usage: polarity-keeper --key <file> [--server host:port] [--state <file>] [--words <file>] [--ports A-B] [--per-link-ports] [--protocol N]\n"
                  "                   [--metrics <file.prom>] [--status <file.json>]\n"
@@ -99,8 +95,7 @@ int Usage()
     return 2;
 }
 
-int NewKey(const std::string& path)
-{
+int NewKey(const std::string& path) {
     KeyPair key;
     if (!GenerateKey(&key)) {
         std::fprintf(stderr, "cannot make a key\n");
@@ -125,8 +120,7 @@ int NewKey(const std::string& path)
 
 } // namespace
 
-int main(int argc, char** argv)
-{
+int main(int argc, char** argv) {
     KeeperOptions o;
     o.protocol = sfv::lobby::kProtocol;
     std::string keyPath, metricsPath, statusPath, wordsPath;
@@ -139,15 +133,13 @@ int main(int argc, char** argv)
         else if (a == "--words" && hasValue) {
             wordsPath = argv[++i];
             o.words = ReadWords(wordsPath);
-        }
-        else if (a == "--protocol" && hasValue) o.protocol = static_cast<uint16_t>(std::atoi(argv[++i]));
+        } else if (a == "--protocol" && hasValue) o.protocol = static_cast<uint16_t>(std::atoi(argv[++i]));
         else if (a == "--ports" && hasValue) {
             const std::string r = argv[++i];
             const size_t dash = r.find('-');
             o.portBegin = static_cast<uint16_t>(std::atoi(r.c_str()));
             o.portEnd = dash == std::string::npos ? o.portBegin : static_cast<uint16_t>(std::atoi(r.c_str() + dash + 1));
-        }
-        else if (a == "--per-link-ports") o.linkMux = false;
+        } else if (a == "--per-link-ports") o.linkMux = false;
         else if (a == "--metrics" && hasValue) metricsPath = argv[++i];
         else if (a == "--status" && hasValue) statusPath = argv[++i];
         else if (a == "--server-stats" && hasValue) o.serverStatsPath = argv[++i];
@@ -159,8 +151,7 @@ int main(int argc, char** argv)
                 s.resize(colon);
             }
             o.host = s;
-        }
-        else return Usage();
+        } else return Usage();
     }
     if (keyPath.empty()) return Usage();
     std::ifstream keyFile(keyPath);

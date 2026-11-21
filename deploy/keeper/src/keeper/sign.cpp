@@ -16,8 +16,7 @@
 
 namespace sfv::keeper {
 
-std::string Hex(const uint8_t* data, size_t size)
-{
+std::string Hex(const uint8_t* data, size_t size) {
     static const char kDigits[] = "0123456789abcdef";
     std::string s;
     for (size_t i = 0; i < size; i++) {
@@ -27,8 +26,7 @@ std::string Hex(const uint8_t* data, size_t size)
     return s;
 }
 
-bool FromHex(std::string_view text, uint8_t* out, size_t size)
-{
+bool FromHex(std::string_view text, uint8_t* out, size_t size) {
     if (text.size() != size * 2) return false;
     auto nibble = [](char c) -> int {
         if (c >= '0' && c <= '9') return c - '0';
@@ -46,16 +44,14 @@ bool FromHex(std::string_view text, uint8_t* out, size_t size)
 
 std::string KeyToText(const KeyPair& key) { return Hex(key.d, 32) + Hex(key.pub, 64); }
 
-bool KeyFromText(std::string_view text, KeyPair* out)
-{
+bool KeyFromText(std::string_view text, KeyPair* out) {
     while (!text.empty() && (text.back() == '\n' || text.back() == '\r' || text.back() == ' ')) text.remove_suffix(1);
     return text.size() == 192 && FromHex(text.substr(0, 64), out->d, 32) && FromHex(text.substr(64), out->pub, 64);
 }
 
 #ifdef _WIN32
 
-bool GenerateKey(KeyPair* out)
-{
+bool GenerateKey(KeyPair* out) {
     BCRYPT_KEY_HANDLE key = nullptr;
     if (!BCRYPT_SUCCESS(BCryptGenerateKeyPair(BCRYPT_ECDSA_P256_ALG_HANDLE, &key, 256, 0))) return false;
     bool ok = BCRYPT_SUCCESS(BCryptFinalizeKeyPair(key, 0));
@@ -71,8 +67,7 @@ bool GenerateKey(KeyPair* out)
     return true;
 }
 
-bool Sign(const KeyPair& pair, const uint8_t* data, size_t size, uint8_t (&signature)[64])
-{
+bool Sign(const KeyPair& pair, const uint8_t* data, size_t size, uint8_t (&signature)[64]) {
     uint8_t blob[sizeof(BCRYPT_ECCKEY_BLOB) + 96] = {};
     auto* header = reinterpret_cast<BCRYPT_ECCKEY_BLOB*>(blob);
     header->dwMagic = BCRYPT_ECDSA_PRIVATE_P256_MAGIC;
@@ -96,8 +91,7 @@ bool Sign(const KeyPair& pair, const uint8_t* data, size_t size, uint8_t (&signa
 
 #else
 
-bool GenerateKey(KeyPair* out)
-{
+bool GenerateKey(KeyPair* out) {
     EVP_PKEY* key = EVP_PKEY_Q_keygen(nullptr, nullptr, "EC", "P-256");
     if (!key) return false;
     BIGNUM* d = nullptr;
@@ -112,8 +106,7 @@ bool GenerateKey(KeyPair* out)
     return ok;
 }
 
-bool Sign(const KeyPair& pair, const uint8_t* data, size_t size, uint8_t (&signature)[64])
-{
+bool Sign(const KeyPair& pair, const uint8_t* data, size_t size, uint8_t (&signature)[64]) {
     uint8_t pub[65];
     pub[0] = 0x04;
     std::memcpy(pub + 1, pair.pub, 64);

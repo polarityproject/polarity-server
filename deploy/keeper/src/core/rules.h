@@ -23,12 +23,14 @@
 
 namespace sfv {
 
-enum class Rotation : uint8_t { WinnerStays, LoserStays, RoundRobin };
+enum class Rotation : uint8_t { WinnerStays,
+                                LoserStays,
+                                RoundRobin };
 
 struct Rules {
-    uint8_t firstTo = 2;    // games to win the set
-    uint8_t bestOf = 3;     // rounds per game
-    uint8_t timer = 99;     // seconds
+    uint8_t firstTo = 2; // games to win the set
+    uint8_t bestOf = 3;  // rounds per game
+    uint8_t timer = 99;  // seconds
     Rotation rotation = Rotation::WinnerStays;
     uint8_t staysLimit = 3; // sets in a row for whoever stays (0: no limit); not used with round robin
     bool operator==(const Rules&) const = default;

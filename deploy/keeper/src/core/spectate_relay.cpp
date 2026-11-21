@@ -14,7 +14,7 @@ constexpr int64_t kBeatMs = 250;
 constexpr int64_t kListEveryMs = 1000;
 constexpr int64_t kStreamResendMs = 300;
 constexpr int64_t kWelcomeAfterMs = 1500; // after a viewer's Accept (its list first)
-constexpr int kBatchesAhead = 4; // as the host's (netplay_driver.cpp kStreamBatchesAhead)
+constexpr int kBatchesAhead = 4;          // as the host's (netplay_driver.cpp kStreamBatchesAhead)
 constexpr int64_t kViewerSilenceMs = 10000;
 constexpr int64_t kHostSilenceMs = 15000;
 // After the host has left: how long viewers far behind are still served.
@@ -28,28 +28,23 @@ uint32_t Now32(int64_t ms) { return static_cast<uint32_t>(ms); }
 } // namespace
 
 SpectateRelay::SpectateRelay(RelayConfig config, Send toHost, Send toViewer)
-    : config_(std::move(config)), toHost_(std::move(toHost)), toViewer_(std::move(toViewer))
-{
+    : config_(std::move(config)), toHost_(std::move(toHost)), toViewer_(std::move(toViewer)) {
 }
 
-void SpectateRelay::Log(const std::string& line) const
-{
+void SpectateRelay::Log(const std::string& line) const {
     if (config_.log) config_.log(line);
 }
 
-void SpectateRelay::Up(const lobby::Message& m)
-{
+void SpectateRelay::Up(const lobby::Message& m) {
     if (host_ && !hostLeft_) toHost_(host_, m);
 }
 
-void SpectateRelay::Down(uint64_t to, const lobby::Message& m)
-{
+void SpectateRelay::Down(uint64_t to, const lobby::Message& m) {
     toViewer_(to, m);
     stats_.bytesToViewers += lobby::Encode(m).size();
 }
 
-SpectateRelay::Game& SpectateRelay::GameOf(uint64_t id)
-{
+SpectateRelay::Game& SpectateRelay::GameOf(uint64_t id) {
     auto it = games_.find(id);
     if (it != games_.end()) return it->second;
     Game& g = games_[id];
@@ -62,38 +57,32 @@ SpectateRelay::Game& SpectateRelay::GameOf(uint64_t id)
     return games_[id];
 }
 
-SpectateRelay::Game* SpectateRelay::Find(uint64_t id)
-{
+SpectateRelay::Game* SpectateRelay::Find(uint64_t id) {
     auto it = games_.find(id);
     return it == games_.end() ? nullptr : &it->second;
 }
 
-const SpectateRelay::Game* SpectateRelay::Find(uint64_t id) const
-{
+const SpectateRelay::Game* SpectateRelay::Find(uint64_t id) const {
     auto it = games_.find(id);
     return it == games_.end() ? nullptr : &it->second;
 }
 
-bool SpectateRelay::Complete(const Game& g) const
-{
+bool SpectateRelay::Complete(const Game& g) const {
     return g.listed && g.entry.finished && g.frames.size() >= g.entry.frames && g.hasLoaded;
 }
 
-int SpectateRelay::IndexOf(uint64_t id) const
-{
+int SpectateRelay::IndexOf(uint64_t id) const {
     const auto it = std::find(order_.begin(), order_.end(), id);
     return it == order_.end() ? -1 : static_cast<int>(it - order_.begin());
 }
 
-void SpectateRelay::SetHost(uint64_t id, uint64_t build)
-{
+void SpectateRelay::SetHost(uint64_t id, uint64_t build) {
     host_ = id;
     build_ = build;
     hostHeardMs_ = lastStepMs_;
 }
 
-void SpectateRelay::HostGone(int64_t nowMs)
-{
+void SpectateRelay::HostGone(int64_t nowMs) {
     if (hostLeft_) return;
     hostLeft_ = true;
     hostGoneMs_ = nowMs;
@@ -103,61 +92,59 @@ void SpectateRelay::HostGone(int64_t nowMs)
 
 // ----- the host ----------------------------------------------------------------
 
-void SpectateRelay::FromHost(const lobby::Message& m, int64_t nowMs)
-{
+void SpectateRelay::FromHost(const lobby::Message& m, int64_t nowMs) {
     if (hostLeft_) return;
     hostHeardMs_ = nowMs;
     stats_.bytesFromHost += lobby::Encode(m).size();
     switch (m.type) {
-    case lobby::Type::Accept:
-        if (!accepted_) Log("relay: watching " + m.name + "'s set");
-        accepted_ = true;
-        break;
-    case lobby::Type::Reject:
-        // The host does not know this member is the keeper yet (its proof
-        // arrives through the server): Hello again in a moment.
-        if (!accepted_) Log("relay: the host turned the relay away (" + std::to_string(static_cast<int>(m.reason)) + "); trying again");
-        helloMs_ = nowMs + 1000;
-        break;
-    case lobby::Type::SessionState:
-        state_ = m;
-        haveState_ = true;
-        if (m.matchId) live_ = m.matchId;
-        CheckDecided();
-        break;
-    case lobby::Type::Welcome: {
-        Game& g = GameOf(m.matchId);
-        if (!g.hasWelcome) Log("relay: game " + std::to_string(IndexOf(m.matchId) + 1) + " announced");
-        g.welcome = m;
-        g.hasWelcome = true;
-        live_ = m.matchId;
-        break;
-    }
-    case lobby::Type::Loaded:
-        if (Game* g = Find(m.matchId)) {
-            g->loaded = m;
-            g->hasLoaded = true;
+        case lobby::Type::Accept:
+            if (!accepted_) Log("relay: watching " + m.name + "'s set");
+            accepted_ = true;
+            break;
+        case lobby::Type::Reject:
+            // The host does not know this member is the keeper yet (its proof
+            // arrives through the server): Hello again in a moment.
+            if (!accepted_) Log("relay: the host turned the relay away (" + std::to_string(static_cast<int>(m.reason)) + "); trying again");
+            helloMs_ = nowMs + 1000;
+            break;
+        case lobby::Type::SessionState:
+            state_ = m;
+            haveState_ = true;
+            if (m.matchId) live_ = m.matchId;
+            CheckDecided();
+            break;
+        case lobby::Type::Welcome: {
+            Game& g = GameOf(m.matchId);
+            if (!g.hasWelcome) Log("relay: game " + std::to_string(IndexOf(m.matchId) + 1) + " announced");
+            g.welcome = m;
+            g.hasWelcome = true;
+            live_ = m.matchId;
+            break;
         }
-        break;
-    case lobby::Type::Inputs:
-        if (Game* g = Find(m.matchId)) AddFrames(*g, m);
-        break;
-    case lobby::Type::Matches:
-        OnHostList(m);
-        break;
-    case lobby::Type::Bye:
-        byeText_ = m.text;
-        byeForfeit_ = m.forfeit;
-        Log("relay: the host left the session" + (m.text.empty() ? std::string() : ": " + m.text));
-        HostGone(nowMs);
-        break;
-    default:
-        break;
+        case lobby::Type::Loaded:
+            if (Game* g = Find(m.matchId)) {
+                g->loaded = m;
+                g->hasLoaded = true;
+            }
+            break;
+        case lobby::Type::Inputs:
+            if (Game* g = Find(m.matchId)) AddFrames(*g, m);
+            break;
+        case lobby::Type::Matches:
+            OnHostList(m);
+            break;
+        case lobby::Type::Bye:
+            byeText_ = m.text;
+            byeForfeit_ = m.forfeit;
+            Log("relay: the host left the session" + (m.text.empty() ? std::string() : ": " + m.text));
+            HostGone(nowMs);
+            break;
+        default:
+            break;
     }
 }
 
-void SpectateRelay::OnHostList(const lobby::Message& m)
-{
+void SpectateRelay::OnHostList(const lobby::Message& m) {
     if (hostSlices_.size() != m.sliceOf) hostSlices_.assign(m.sliceOf, lobby::MatchEntry{});
     for (size_t i = 0; i < m.matches.size() && m.sliceAt + i < hostSlices_.size(); i++) hostSlices_[m.sliceAt + i] = m.matches[i];
     if (!std::all_of(hostSlices_.begin(), hostSlices_.end(), [](const lobby::MatchEntry& e) { return e.id != 0; })) return;
@@ -188,8 +175,7 @@ void SpectateRelay::OnHostList(const lobby::Message& m)
     }
 }
 
-void SpectateRelay::AddFrames(Game& g, const lobby::Message& m)
-{
+void SpectateRelay::AddFrames(Game& g, const lobby::Message& m) {
     for (size_t i = 0; i < m.frames.size(); i++) {
         const uint32_t at = m.first + static_cast<uint32_t>(i);
         if (at >= kMaxFrames) break;
@@ -203,8 +189,7 @@ void SpectateRelay::AddFrames(Game& g, const lobby::Message& m)
     }
 }
 
-void SpectateRelay::CheckDecided()
-{
+void SpectateRelay::CheckDecided() {
     // The same two play on into a next set (keeper again): the score starts
     // over, and the set's end is to come again.
     if (decided_ && haveState_ && state_.seats[0].wins < config_.firstTo && state_.seats[1].wins < config_.firstTo) {
@@ -218,8 +203,7 @@ void SpectateRelay::CheckDecided()
     }
 }
 
-void SpectateRelay::StepHost(int64_t nowMs)
-{
+void SpectateRelay::StepHost(int64_t nowMs) {
     if (!host_ || hostLeft_) return;
     if (accepted_ && nowMs - hostHeardMs_ > kHostSilenceMs) {
         Log("relay: the host is silent");
@@ -261,8 +245,7 @@ void SpectateRelay::StepHost(int64_t nowMs)
             if (g->hasLoaded) {
                 upStreaming_ = true;
                 upAckMs_ = -1000000;
-            }
-            else if (nowMs - upLoadedMs_ >= kLoadedEveryMs) {
+            } else if (nowMs - upLoadedMs_ >= kLoadedEveryMs) {
                 upLoadedMs_ = nowMs;
                 lobby::Message loaded;
                 loaded.type = lobby::Type::Loaded;
@@ -280,8 +263,7 @@ void SpectateRelay::StepHost(int64_t nowMs)
             ack.time = Now32(nowMs);
             Up(ack);
         }
-    }
-    else if (nowMs - upAckMs_ >= kBeatMs) {
+    } else if (nowMs - upAckMs_ >= kBeatMs) {
         // All in hand: a heartbeat (matchId 0: not streaming anything).
         upAckMs_ = nowMs;
         lobby::Message ack;
@@ -293,8 +275,7 @@ void SpectateRelay::StepHost(int64_t nowMs)
 
 // ----- the viewers ----------------------------------------------------------------
 
-void SpectateRelay::FromViewer(uint64_t id, const lobby::Message& m, int64_t nowMs)
-{
+void SpectateRelay::FromViewer(uint64_t id, const lobby::Message& m, int64_t nowMs) {
     auto it = viewers_.find(id);
     if (m.type == lobby::Type::Hello) {
         lobby::Message out;
@@ -338,57 +319,54 @@ void SpectateRelay::FromViewer(uint64_t id, const lobby::Message& m, int64_t now
     Viewer& v = it->second;
     v.heardMs = nowMs;
     switch (m.type) {
-    case lobby::Type::Loaded:
-        if (!Find(m.matchId)) break;
-        if (v.match != m.matchId) {
-            v.streaming = false;
-            v.wanted = 0;
-            v.sentThrough = -1;
-        }
-        if (v.match != m.matchId) v.decided = false;
-        v.match = m.matchId;
-        v.loaded = true;
-        if (const Game* g = Find(m.matchId); g && g->hasLoaded) Down(id, g->loaded);
-        break;
-    case lobby::Type::InputsAck:
-        v.ackMatch = m.matchId;
-        v.ackFirst = m.first;
-        v.played = m.playedTo;
-        v.decided = m.decided;
-        v.heardTime = m.time;
-        v.heardTimeAtMs = nowMs;
-        if (!m.matchId) {
-            v.streaming = false;
-        }
-        else if (Find(m.matchId)) {
-            if (!v.streaming || v.match != m.matchId) {
-                v.streaming = true;
-                v.match = m.matchId;
-                v.sentThrough = static_cast<int>(m.first) - 1;
-                v.progressMs = nowMs;
+        case lobby::Type::Loaded:
+            if (!Find(m.matchId)) break;
+            if (v.match != m.matchId) {
+                v.streaming = false;
+                v.wanted = 0;
+                v.sentThrough = -1;
             }
-            if (static_cast<int>(m.first) > v.wanted) {
-                v.wanted = static_cast<int>(m.first);
-                v.progressMs = nowMs;
+            if (v.match != m.matchId) v.decided = false;
+            v.match = m.matchId;
+            v.loaded = true;
+            if (const Game* g = Find(m.matchId); g && g->hasLoaded) Down(id, g->loaded);
+            break;
+        case lobby::Type::InputsAck:
+            v.ackMatch = m.matchId;
+            v.ackFirst = m.first;
+            v.played = m.playedTo;
+            v.decided = m.decided;
+            v.heardTime = m.time;
+            v.heardTimeAtMs = nowMs;
+            if (!m.matchId) {
+                v.streaming = false;
+            } else if (Find(m.matchId)) {
+                if (!v.streaming || v.match != m.matchId) {
+                    v.streaming = true;
+                    v.match = m.matchId;
+                    v.sentThrough = static_cast<int>(m.first) - 1;
+                    v.progressMs = nowMs;
+                }
+                if (static_cast<int>(m.first) > v.wanted) {
+                    v.wanted = static_cast<int>(m.first);
+                    v.progressMs = nowMs;
+                }
             }
-        }
-        break;
-    case lobby::Type::Bye:
-        Log("relay: " + v.name + " stopped watching");
-        viewers_.erase(it);
-        break;
-    default:
-        break;
+            break;
+        case lobby::Type::Bye:
+            Log("relay: " + v.name + " stopped watching");
+            viewers_.erase(it);
+            break;
+        default:
+            break;
     }
 }
 
-void SpectateRelay::ViewerGone(uint64_t id)
-{
+void SpectateRelay::ViewerGone(uint64_t id) {
     if (viewers_.erase(id)) Log("relay: a viewer left (" + std::to_string(viewers_.size()) + " watching)");
 }
 
-const SpectateRelay::Game* SpectateRelay::LastPlayed() const
-{
+const SpectateRelay::Game* SpectateRelay::LastPlayed() const {
     for (auto it = order_.rbegin(); it != order_.rend(); ++it) {
         const Game& g = games_.at(*it);
         if (!g.frames.empty()) return &g;
@@ -396,8 +374,7 @@ const SpectateRelay::Game* SpectateRelay::LastPlayed() const
     return nullptr;
 }
 
-bool SpectateRelay::ViewerDone(const Viewer& v) const
-{
+bool SpectateRelay::ViewerDone(const Viewer& v) const {
     // The host gone, nothing more comes: done once on the last game played
     // and its battle at the result, or played through every frame there is
     // (a set that broke off mid-game). `first` alone is not it: a viewer
@@ -409,8 +386,7 @@ bool SpectateRelay::ViewerDone(const Viewer& v) const
     return v.decided || v.played >= last->frames.size();
 }
 
-void SpectateRelay::SendList(int64_t nowMs, uint64_t only)
-{
+void SpectateRelay::SendList(int64_t nowMs, uint64_t only) {
     (void)nowMs;
     std::vector<lobby::MatchEntry> list;
     for (uint64_t id : order_) {
@@ -439,8 +415,7 @@ void SpectateRelay::SendList(int64_t nowMs, uint64_t only)
     }
 }
 
-void SpectateRelay::Stream(int64_t nowMs)
-{
+void SpectateRelay::Stream(int64_t nowMs) {
     for (auto& [id, v] : viewers_) {
         if (!v.streaming) continue;
         const Game* g = Find(v.match);
@@ -464,14 +439,12 @@ void SpectateRelay::Stream(int64_t nowMs)
     }
 }
 
-void SpectateRelay::StepViewers(int64_t nowMs)
-{
+void SpectateRelay::StepViewers(int64_t nowMs) {
     for (auto it = viewers_.begin(); it != viewers_.end();) {
         if (nowMs - it->second.heardMs > kViewerSilenceMs) {
             Log("relay: " + it->second.name + " silent; dropped");
             it = viewers_.erase(it);
-        }
-        else {
+        } else {
             ++it;
         }
     }
@@ -494,8 +467,7 @@ void SpectateRelay::StepViewers(int64_t nowMs)
             if (st.phase == lobby::SessionPhase::Lobby) {
                 if (live && v.match == live->id && v.decided) v.inSelect = true;
                 if (!v.inSelect && v.match) st.phase = lobby::SessionPhase::Match;
-            }
-            else {
+            } else {
                 v.inSelect = false;
             }
             st.time = Now32(nowMs);
@@ -532,22 +504,19 @@ void SpectateRelay::StepViewers(int64_t nowMs)
     }
 }
 
-void SpectateRelay::Step(int64_t nowMs)
-{
+void SpectateRelay::Step(int64_t nowMs) {
     lastStepMs_ = nowMs;
     StepHost(nowMs);
     StepViewers(nowMs);
 }
 
-bool SpectateRelay::Done(int64_t nowMs) const
-{
+bool SpectateRelay::Done(int64_t nowMs) const {
     if (!hostLeft_) return false;
     if (viewers_.empty() && nowMs - hostGoneMs_ >= kCloseAfterHostMs) return true;
     return nowMs - hostGoneMs_ > kKeepAfterHostMs + 5000;
 }
 
-std::string SpectateRelay::ViewersLine() const
-{
+std::string SpectateRelay::ViewersLine() const {
     std::string out;
     for (const auto& [id, v] : viewers_) {
         if (!out.empty()) out += ", ";
@@ -557,8 +526,7 @@ std::string SpectateRelay::ViewersLine() const
     return out;
 }
 
-RelayStats SpectateRelay::Stats() const
-{
+RelayStats SpectateRelay::Stats() const {
     RelayStats s = stats_;
     s.viewers = viewers_.size();
     s.games = order_.size();

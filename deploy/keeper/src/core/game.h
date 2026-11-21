@@ -17,6 +17,7 @@ constexpr int kNumPlayers = 2;
 // For Street Fighter V this is the game's own per-frame input value (what its
 // InputUnit records); the bits below are the layout the mock game uses.
 using PackedInput = uint32_t;
+
 enum InputBit : PackedInput {
     kUp = 1 << 0,
     kDown = 1 << 1,
@@ -43,10 +44,10 @@ struct FrameInputs {
 struct PlayerSetup {
     uint32_t character = 0; // character code, up to 4 ASCII chars packed little-endian ("KEN", "Z37")
     uint16_t costume = 0;
-    uint8_t color = 0;    // 0-based (the menu shows color + 1)
-    uint8_t vskill = 0;   // 0 = I, 1 = II, 2 = III
-    uint8_t vtrigger = 0; // 0 = I, 1 = II
-    uint8_t comment = 0;  // V-Comment: 0 = Auto, n = the n-th comment
+    uint8_t color = 0;     // 0-based (the menu shows color + 1)
+    uint8_t vskill = 0;    // 0 = I, 1 = II, 2 = III
+    uint8_t vtrigger = 0;  // 0 = I, 1 = II
+    uint8_t comment = 0;   // V-Comment: 0 = Auto, n = the n-th comment
     uint8_t variation = 0; // the costume's variant (held button at load in the menus); 0 = none
     // The character's balance version (season * 10 + patch, 60 on the final
     // game); -1: whichever each game takes as its latest (recordings before
@@ -55,15 +56,13 @@ struct PlayerSetup {
     bool operator==(const PlayerSetup&) const = default;
 };
 
-inline uint32_t PackCode(const char* code)
-{
+inline uint32_t PackCode(const char* code) {
     uint32_t v = 0;
     for (int i = 0; i < 4 && code[i]; i++) v |= uint32_t(uint8_t(code[i])) << (8 * i);
     return v;
 }
 
-inline std::string UnpackCode(uint32_t v)
-{
+inline std::string UnpackCode(uint32_t v) {
     std::string s;
     for (int i = 0; i < 4 && (v >> (8 * i)) & 0xFF; i++) s += char((v >> (8 * i)) & 0xFF);
     return s;
@@ -140,6 +139,7 @@ public:
     // session keeps per frame (ReplayFile::frameFlags). kFrameFight: a
     // round's fight is on (after "FIGHT!", before its KO or time over).
     static constexpr uint8_t kFrameFight = 1;
+
     virtual uint8_t FrameFlags() { return 0; }
 };
 

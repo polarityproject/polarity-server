@@ -12,23 +12,20 @@ namespace {
 const char kAlphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 constexpr std::string_view kAnswerMagic = "SFVK1";
 
-bool Number(std::string_view text, int64_t* out)
-{
+bool Number(std::string_view text, int64_t* out) {
     if (text.empty() || text.size() > 10) return false;
     const auto [end, ec] = std::from_chars(text.data(), text.data() + text.size(), *out);
     return ec == std::errc() && end == text.data() + text.size();
 }
 
-bool Int(std::string_view text, int* out)
-{
+bool Int(std::string_view text, int* out) {
     int64_t n = 0;
     if (!Number(text, &n) || n < INT32_MIN || n > INT32_MAX) return false;
     *out = static_cast<int>(n);
     return true;
 }
 
-std::vector<std::string_view> Split(std::string_view text, char sep)
-{
+std::vector<std::string_view> Split(std::string_view text, char sep) {
     std::vector<std::string_view> parts;
     size_t from = 0;
     while (true) {
@@ -42,8 +39,7 @@ std::vector<std::string_view> Split(std::string_view text, char sep)
 
 // Names and codes in the list: no tabs, newlines or commas (the list's
 // separators), nothing below space.
-std::string Clean(std::string_view text)
-{
+std::string Clean(std::string_view text) {
     std::string s;
     for (char ch : text) {
         const auto c = static_cast<unsigned char>(ch);
@@ -53,15 +49,13 @@ std::string Clean(std::string_view text)
     return s;
 }
 
-std::string Slot(const Listing& listing, const char* key)
-{
+std::string Slot(const Listing& listing, const char* key) {
     const auto it = listing.find(key);
     return it != listing.end() ? it->second : std::string();
 }
 
 // Cut to `max` bytes at a whole UTF-8 character.
-std::string CutUtf8(std::string s, size_t max)
-{
+std::string CutUtf8(std::string s, size_t max) {
     if (s.size() <= max) return s;
     s.resize(max);
     while (!s.empty() && (static_cast<unsigned char>(s.back()) & 0xC0) == 0x80) s.pop_back();
@@ -71,8 +65,7 @@ std::string CutUtf8(std::string s, size_t max)
 
 } // namespace
 
-std::string CleanCountry(std::string_view code)
-{
+std::string CleanCountry(std::string_view code) {
     if (code.size() != 2) return {};
     for (char c : code) {
         if (c < 'A' || c > 'Z') return {};
@@ -82,13 +75,11 @@ std::string CleanCountry(std::string_view code)
 
 std::string TableKey(int table) { return "t" + std::to_string(table); }
 
-std::string ProofMessage(std::string_view room, uint32_t member)
-{
+std::string ProofMessage(std::string_view room, uint32_t member) {
     return "sfvr-keeper 1 " + std::string(room) + " " + std::to_string(member);
 }
 
-std::string Base64Encode(const uint8_t* data, size_t size)
-{
+std::string Base64Encode(const uint8_t* data, size_t size) {
     std::string out;
     for (size_t i = 0; i < size; i += 3) {
         const uint32_t n = (uint32_t(data[i]) << 16) | (i + 1 < size ? uint32_t(data[i + 1]) << 8 : 0) |
@@ -101,8 +92,7 @@ std::string Base64Encode(const uint8_t* data, size_t size)
     return out;
 }
 
-bool Base64Decode(std::string_view text, std::vector<uint8_t>* out)
-{
+bool Base64Decode(std::string_view text, std::vector<uint8_t>* out) {
     out->clear();
     uint32_t n = 0;
     int bits = 0;
@@ -132,14 +122,7 @@ const struct {
     const char* code;
     const char* name;
 } kCharacters[kCharacterCount] = {
-    {"RYU", "Ryu"},     {"VEG", "M. Bison"}, {"CNL", "Chun-Li"}, {"KEN", "Ken"},      {"KRN", "Karin"},   {"ZGF", "Zangief"},
-    {"DSM", "Dhalsim"}, {"NSH", "Nash"},     {"BLR", "Vega"},    {"JRI", "Juri"},     {"BRD", "Birdie"},  {"RMK", "R. Mika"},
-    {"RSD", "Rashid"},  {"FAN", "F.A.N.G"},  {"LAR", "Laura"},   {"NCL", "Necalli"},  {"CMY", "Cammy"},   {"GUL", "Guile"},
-    {"IBK", "Ibuki"},   {"BSN", "Balrog"},   {"URN", "Urien"},   {"ALX", "Alex"},     {"Z21", "Akuma"},   {"Z20", "Kolin"},
-    {"Z22", "Ed"},      {"Z23", "Menat"},    {"Z24", "Abigail"}, {"Z25", "Zeku"},     {"Z26", "Sakura"},  {"Z27", "Blanka"},
-    {"Z28", "Falke"},   {"Z29", "Cody"},     {"Z30", "G"},       {"Z31", "Sagat"},    {"Z32", "Kage"},    {"Z33", "Poison"},
-    {"Z34", "E. Honda"}, {"Z35", "Lucia"},   {"Z36", "Gill"},    {"Z37", "Seth"},     {"Z38", "Dan"},     {"Z39", "Rose"},
-    {"Z40", "Oro"},     {"Z41", "Akira"},    {"Z42", "Luke"}};
+    {"RYU", "Ryu"}, {"VEG", "M. Bison"}, {"CNL", "Chun-Li"}, {"KEN", "Ken"}, {"KRN", "Karin"}, {"ZGF", "Zangief"}, {"DSM", "Dhalsim"}, {"NSH", "Nash"}, {"BLR", "Vega"}, {"JRI", "Juri"}, {"BRD", "Birdie"}, {"RMK", "R. Mika"}, {"RSD", "Rashid"}, {"FAN", "F.A.N.G"}, {"LAR", "Laura"}, {"NCL", "Necalli"}, {"CMY", "Cammy"}, {"GUL", "Guile"}, {"IBK", "Ibuki"}, {"BSN", "Balrog"}, {"URN", "Urien"}, {"ALX", "Alex"}, {"Z21", "Akuma"}, {"Z20", "Kolin"}, {"Z22", "Ed"}, {"Z23", "Menat"}, {"Z24", "Abigail"}, {"Z25", "Zeku"}, {"Z26", "Sakura"}, {"Z27", "Blanka"}, {"Z28", "Falke"}, {"Z29", "Cody"}, {"Z30", "G"}, {"Z31", "Sagat"}, {"Z32", "Kage"}, {"Z33", "Poison"}, {"Z34", "E. Honda"}, {"Z35", "Lucia"}, {"Z36", "Gill"}, {"Z37", "Seth"}, {"Z38", "Dan"}, {"Z39", "Rose"}, {"Z40", "Oro"}, {"Z41", "Akira"}, {"Z42", "Luke"}};
 
 // The offered titles, in the form's order: the game's FixedPhraseCommentSpec
 // Id and its English CommentText (trailing spaces trimmed).
@@ -168,24 +151,21 @@ const struct {
 
 const char* CharacterCode(int index) { return index >= 0 && index < kCharacterCount ? kCharacters[index].code : ""; }
 
-int CharacterIndex(std::string_view code)
-{
+int CharacterIndex(std::string_view code) {
     for (int i = 0; i < kCharacterCount; i++) {
         if (code == kCharacters[i].code) return i;
     }
     return -1;
 }
 
-const char* CharacterName(std::string_view code)
-{
+const char* CharacterName(std::string_view code) {
     const int i = CharacterIndex(code);
     return i >= 0 ? kCharacters[i].name : "";
 }
 
 int TitleId(int index) { return index >= 0 && index < kTitleCount ? kTitles[index].id : 0; }
 
-int TitleIndex(int id)
-{
+int TitleIndex(int id) {
     for (int i = 0; i < kTitleCount; i++) {
         if (kTitles[i].id == id) return i;
     }
@@ -194,8 +174,7 @@ int TitleIndex(int id)
 
 int TitleCharacters(int id) { return id == 3 ? 2 : 0; }
 
-bool ValidTitle(const RoomTitle& title)
-{
+bool ValidTitle(const RoomTitle& title) {
     if (TitleIndex(title.id) < 0) return false;
     const int n = TitleCharacters(title.id);
     for (int i = 0; i < 2; i++) {
@@ -204,15 +183,13 @@ bool ValidTitle(const RoomTitle& title)
     return true;
 }
 
-std::string FormatTitle(const RoomTitle& title)
-{
+std::string FormatTitle(const RoomTitle& title) {
     std::string s = std::to_string(title.id);
     for (int i = 0; i < TitleCharacters(title.id); i++) s += "," + title.chara[i];
     return s;
 }
 
-bool ParseTitle(std::string_view text, RoomTitle* out)
-{
+bool ParseTitle(std::string_view text, RoomTitle* out) {
     const auto f = Split(text, ',');
     RoomTitle t;
     if (f.empty() || !Int(f[0], &t.id)) return false;
@@ -223,14 +200,12 @@ bool ParseTitle(std::string_view text, RoomTitle* out)
     return true;
 }
 
-const char* TitleTemplate(int id)
-{
+const char* TitleTemplate(int id) {
     const int i = TitleIndex(id);
     return i >= 0 ? kTitles[i].text : "";
 }
 
-std::string TitleText(const RoomTitle& title)
-{
+std::string TitleText(const RoomTitle& title) {
     std::string s = TitleTemplate(title.id);
     for (int i = 0; i < 2; i++) {
         const std::string key = "{common" + std::to_string(i + 1) + "}";
@@ -240,15 +215,13 @@ std::string TitleText(const RoomTitle& title)
     return s;
 }
 
-std::string FormatRequest(const Request& request)
-{
+std::string FormatRequest(const Request& request) {
     std::string s = std::to_string(request.seq) + ":" + request.kind;
     for (const std::string& a : request.args) s += ":" + a;
     return s;
 }
 
-bool ParseRequest(std::string_view text, Request* out)
-{
+bool ParseRequest(std::string_view text, Request* out) {
     const auto parts = Split(text, ':');
     if (parts.size() < 2 || parts[1].empty()) return false;
     int64_t seq = 0;
@@ -261,13 +234,11 @@ bool ParseRequest(std::string_view text, Request* out)
     return true;
 }
 
-Request RoomRequest(uint32_t seq, const RoomSettings& settings)
-{
+Request RoomRequest(uint32_t seq, const RoomSettings& settings) {
     return {seq, "room", {std::to_string(settings.tables), settings.isPublic ? "1" : "0", FormatTitle(settings.title)}};
 }
 
-bool ParseRoomSettings(const Request& request, RoomSettings* out)
-{
+bool ParseRoomSettings(const Request& request, RoomSettings* out) {
     if (request.kind != "room" || request.args.size() != 3) return false;
     RoomSettings s;
     int pub = 0;
@@ -278,16 +249,14 @@ bool ParseRoomSettings(const Request& request, RoomSettings* out)
     return true;
 }
 
-std::string FormatAnswer(const Answer& answer)
-{
+std::string FormatAnswer(const Answer& answer) {
     std::string text;
     for (char ch : answer.text) text += ch == '\n' ? ' ' : ch;
     return std::string(kAnswerMagic) + "\n" + std::to_string(answer.seq) + "\n" + answer.kind + "\n" +
            (answer.ok ? "ok" : "no") + "\n" + text;
 }
 
-bool ParseAnswer(const uint8_t* data, size_t size, Answer* out)
-{
+bool ParseAnswer(const uint8_t* data, size_t size, Answer* out) {
     const std::string_view text(reinterpret_cast<const char*>(data), size);
     if (text.substr(0, kAnswerMagic.size()) != kAnswerMagic) return false;
     const auto f = Split(text, '\n');
@@ -301,25 +270,23 @@ bool ParseAnswer(const uint8_t* data, size_t size, Answer* out)
     return true;
 }
 
-void SortRoomList(std::vector<ListedRoom>* rooms)
-{
+void SortRoomList(std::vector<ListedRoom>* rooms) {
     // 0: open seats, 1: room to queue, 2: full.
-    auto group = [](const ListedRoom& r) { return r.members >= kRoomCap ? 2 : r.openSeats > 0 ? 0 : 1; };
+    auto group = [](const ListedRoom& r) { return r.members >= kRoomCap ? 2 : r.openSeats > 0 ? 0
+                                                                                              : 1; };
     std::stable_sort(rooms->begin(), rooms->end(), [&](const ListedRoom& a, const ListedRoom& b) {
         if (group(a) != group(b)) return group(a) < group(b);
         return a.members > b.members;
     });
 }
 
-std::string ListingKindValue(uint16_t protocol, std::string_view version)
-{
+std::string ListingKindValue(uint16_t protocol, std::string_view version) {
     std::string kind = "c" + std::to_string(protocol);
     if (!version.empty()) kind += "/" + Clean(std::string(version.substr(0, kVersionMax)));
     return kind;
 }
 
-Listing RoomListing(const ListedRoom& r, uint16_t protocol)
-{
+Listing RoomListing(const ListedRoom& r, uint16_t protocol) {
     std::string faces;
     for (size_t i = 0; i < r.faces.size() && i < 6; i++) {
         if (i) faces += ',';
@@ -336,14 +303,12 @@ Listing RoomListing(const ListedRoom& r, uint16_t protocol)
     return l;
 }
 
-std::string ListingMessage(std::string_view code, const Listing& l)
-{
+std::string ListingMessage(std::string_view code, const Listing& l) {
     return "sfvr-list 1 " + std::string(code) + "\n" + Slot(l, kListingKind) + "\n" + Slot(l, kListingRoom) + "\n" +
            Slot(l, kListingOwner);
 }
 
-bool ParseRoomListing(std::string_view code, const Listing& l, uint16_t protocol, ListedRoom* out)
-{
+bool ParseRoomListing(std::string_view code, const Listing& l, uint16_t protocol, ListedRoom* out) {
     const std::string kind = Slot(l, kListingKind), plain = ListingKindValue(protocol);
     if (code.empty() || (kind != plain && kind.rfind(plain + "/", 0) != 0)) return false;
     const std::string a = Slot(l, kListingRoom), o = Slot(l, kListingOwner);
@@ -364,8 +329,7 @@ bool ParseRoomListing(std::string_view code, const Listing& l, uint16_t protocol
     return true;
 }
 
-std::string FormatDeskSummary(const DeskSummary& s)
-{
+std::string FormatDeskSummary(const DeskSummary& s) {
     std::string out = std::to_string(s.rev) + "|" + std::to_string(s.publicRooms) + "|" + std::to_string(s.players);
     std::string versions;
     for (const DeskSummary::Version& v : s.versions) {
@@ -380,8 +344,7 @@ std::string FormatDeskSummary(const DeskSummary& s)
     return out;
 }
 
-DeskSummary DeskSummary::For(std::string_view version) const
-{
+DeskSummary DeskSummary::For(std::string_view version) const {
     if (versions.empty()) return *this;
     DeskSummary mine;
     mine.rev = rev;
@@ -394,8 +357,7 @@ DeskSummary DeskSummary::For(std::string_view version) const
     return mine;
 }
 
-bool ParseDeskSummary(std::string_view text, DeskSummary* out)
-{
+bool ParseDeskSummary(std::string_view text, DeskSummary* out) {
     const auto f = Split(text, '|');
     if ((f.size() != 3 && f.size() != 4) || f[0].empty()) return false;
     DeskSummary s;
@@ -417,8 +379,7 @@ bool ParseDeskSummary(std::string_view text, DeskSummary* out)
     return true;
 }
 
-std::string DeskMessage(std::string_view code, const Listing& l)
-{
+std::string DeskMessage(std::string_view code, const Listing& l) {
     return "sfvr-desk 1 " + std::string(code) + "\n" + Slot(l, kBuild) + "\n" + Slot(l, kCount) + "\n" + Slot(l, kDeskSummary);
 }
 
@@ -426,23 +387,26 @@ namespace {
 
 // A JSON string: quotes, backslashes and control characters escaped, and
 // bytes that are not valid UTF-8 (names are players' own) as U+FFFD.
-void JsonString(std::string& out, std::string_view s)
-{
+void JsonString(std::string& out, std::string_view s) {
     out += '"';
     for (size_t i = 0; i < s.size();) {
         const unsigned char c = static_cast<unsigned char>(s[i]);
         if (c < 0x80) {
-            if (c == '"' || c == '\\') { out += '\\'; out += static_cast<char>(c); }
-            else if (c < 0x20) {
+            if (c == '"' || c == '\\') {
+                out += '\\';
+                out += static_cast<char>(c);
+            } else if (c < 0x20) {
                 char esc[8];
                 std::snprintf(esc, sizeof(esc), "\\u%04x", c);
                 out += esc;
-            }
-            else out += static_cast<char>(c);
+            } else out += static_cast<char>(c);
             i++;
             continue;
         }
-        const size_t len = c > 0xF4 ? 0 : c >= 0xF0 ? 4 : c >= 0xE0 ? 3 : c >= 0xC2 ? 2 : 0;
+        const size_t len = c > 0xF4 ? 0 : c >= 0xF0 ? 4
+                                      : c >= 0xE0   ? 3
+                                      : c >= 0xC2   ? 2
+                                                    : 0;
         bool ok = len && i + len <= s.size();
         for (size_t k = 1; ok && k < len; k++) ok = (static_cast<unsigned char>(s[i + k]) & 0xC0) == 0x80;
         if (ok && len == 3) {
@@ -456,8 +420,7 @@ void JsonString(std::string& out, std::string_view s)
         if (ok) {
             out.append(s.substr(i, len));
             i += len;
-        }
-        else {
+        } else {
             out += "\xEF\xBF\xBD";
             i++;
         }
@@ -467,8 +430,7 @@ void JsonString(std::string& out, std::string_view s)
 
 } // namespace
 
-std::string FormatRoomListJson(const std::vector<ListedRoom>& rooms, const RoomTotals& totals, int64_t unixMs)
-{
+std::string FormatRoomListJson(const std::vector<ListedRoom>& rooms, const RoomTotals& totals, int64_t unixMs) {
     std::string out = "{\"version\":1,\"updated\":" + std::to_string(unixMs) + ",\"totals\":{";
     out += "\"online\":" + std::to_string(totals.online) + ",\"in_public_rooms\":" + std::to_string(totals.inPublicRooms) +
            ",\"public_rooms\":" + std::to_string(totals.publicRooms) + "},\"rooms\":[";
@@ -546,15 +508,13 @@ std::string FormatRoomListJson(const std::vector<ListedRoom>& rooms, const RoomT
     return out;
 }
 
-size_t Utf8Length(std::string_view text)
-{
+size_t Utf8Length(std::string_view text) {
     size_t n = 0;
     for (char ch : text) n += (static_cast<unsigned char>(ch) & 0xC0) != 0x80;
     return n;
 }
 
-bool ChatLimiter::Allow(int64_t nowMs, std::string_view text)
-{
+bool ChatLimiter::Allow(int64_t nowMs, std::string_view text) {
     if (lastMs_ >= 0 && nowMs > lastMs_) tokens_ = std::min<double>(kBurst, tokens_ + double(nowMs - lastMs_) / kRefillMs);
     lastMs_ = std::max(lastMs_, nowMs);
     const bool ok = !text.empty() && Utf8Length(text) <= kChatMaxChars && tokens_ >= 1.0;
@@ -564,16 +524,14 @@ bool ChatLimiter::Allow(int64_t nowMs, std::string_view text)
     return ok;
 }
 
-int ChatLimiter::Strikes(int64_t nowMs) const
-{
+int ChatLimiter::Strikes(int64_t nowMs) const {
     return static_cast<int>(std::count_if(strikes_.begin(), strikes_.end(),
                                           [&](int64_t t) { return nowMs - t < kStrikeWindowMs; }));
 }
 
 Request PeekRequest(uint32_t seq, std::string_view code) { return {seq, "peek", {std::string(code)}}; }
 
-std::vector<std::string> PackRoomDetail(const RoomDetail& detail, size_t partBytes)
-{
+std::vector<std::string> PackRoomDetail(const RoomDetail& detail, size_t partBytes) {
     // Control bytes never travel inside a field (they separate them).
     auto clean = [](std::string_view s) {
         std::string out;
@@ -602,8 +560,7 @@ std::vector<std::string> PackRoomDetail(const RoomDetail& detail, size_t partByt
     return parts;
 }
 
-bool ReadDetailPart(std::string_view text, int* part, int* parts, std::string* records)
-{
+bool ReadDetailPart(std::string_view text, int* part, int* parts, std::string* records) {
     const size_t gs = text.find('\x1D'), slash = text.find('/');
     if (gs == std::string_view::npos || slash == std::string_view::npos || slash > gs) return false;
     if (!Int(text.substr(0, slash), part) || !Int(text.substr(slash + 1, gs - slash - 1), parts)) return false;
@@ -612,8 +569,7 @@ bool ReadDetailPart(std::string_view text, int* part, int* parts, std::string* r
     return true;
 }
 
-bool JoinRoomDetail(const std::vector<std::string>& records, RoomDetail* out)
-{
+bool JoinRoomDetail(const std::vector<std::string>& records, RoomDetail* out) {
     RoomDetail d;
     for (const std::string& body : records) {
         if (body.empty()) continue;
@@ -625,8 +581,7 @@ bool JoinRoomDetail(const std::vector<std::string>& records, RoomDetail* out)
                 if (us2 == std::string_view::npos) return false;
                 d.people.push_back({std::string(r.substr(us2 + 1)), std::string(r.substr(1, us - 1)),
                                     CleanCountry(r.substr(us + 1, us2 - us - 1))});
-            }
-            else return false;
+            } else return false;
         }
     }
     d.code = out->code;
@@ -634,30 +589,28 @@ bool JoinRoomDetail(const std::vector<std::string>& records, RoomDetail* out)
     return true;
 }
 
-std::string FoldName(std::string_view name)
-{
+std::string FoldName(std::string_view name) {
     std::string out;
     for (char ch : name) {
         char c = ch;
         if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
         switch (c) {
-        case '0': c = 'o'; break;
-        case '1': c = 'i'; break;
-        case '3': c = 'e'; break;
-        case '4': c = 'a'; break;
-        case '5': c = 's'; break;
-        case '7': c = 't'; break;
-        case '@': c = 'a'; break;
-        case '$': c = 's'; break;
-        default: break;
+            case '0': c = 'o'; break;
+            case '1': c = 'i'; break;
+            case '3': c = 'e'; break;
+            case '4': c = 'a'; break;
+            case '5': c = 's'; break;
+            case '7': c = 't'; break;
+            case '@': c = 'a'; break;
+            case '$': c = 's'; break;
+            default: break;
         }
         if (c >= 'a' && c <= 'z') out += c;
     }
     return out;
 }
 
-std::string WordEntry(std::string_view line)
-{
+std::string WordEntry(std::string_view line) {
     std::string_view s = line;
     while (!s.empty() && (s.back() == ' ' || s.back() == '\t' || s.back() == '\r')) s.remove_suffix(1);
     const bool prefix = !s.empty() && s.back() == '*';
@@ -675,8 +628,7 @@ std::string WordEntry(std::string_view line)
     return prefix ? w + '*' : w;
 }
 
-std::vector<std::string> ParseWordFile(std::string_view text)
-{
+std::vector<std::string> ParseWordFile(std::string_view text) {
     std::vector<std::string> words;
     for (std::string_view line : Split(text, '\n')) {
         size_t start = line.find_first_not_of(" \t\r");
@@ -690,16 +642,14 @@ std::vector<std::string> ParseWordFile(std::string_view text)
 namespace {
 
 // What folding keeps (letters, and the digits and symbols that stand for them).
-bool FoldKeeps(char ch)
-{
+bool FoldKeeps(char ch) {
     const std::string one(1, ch);
     return !FoldName(one).empty();
 }
 
 // A chat word ends at whitespace or ASCII punctuation (not @ $ ' which are
 // part of words: "a$$", "don't").
-bool ChatSeparator(unsigned char c)
-{
+bool ChatSeparator(unsigned char c) {
     if (c >= 0x80) return false;
     if (c <= ' ') return true;
     if (c == '@' || c == '$' || c == '\'') return false;
@@ -708,8 +658,7 @@ bool ChatSeparator(unsigned char c)
 
 } // namespace
 
-bool NameRejected(std::string_view name, const std::vector<std::string>& words)
-{
+bool NameRejected(std::string_view name, const std::vector<std::string>& words) {
     const std::string folded = FoldName(name);
     if (folded.empty()) return false;
     std::vector<std::string> parts; // the name's words, folded
@@ -735,13 +684,14 @@ bool NameRejected(std::string_view name, const std::vector<std::string>& words)
     return false;
 }
 
-std::string CensorChat(std::string_view text, const std::vector<std::string>& words)
-{
+std::string CensorChat(std::string_view text, const std::vector<std::string>& words) {
     if (words.empty()) return std::string(text);
+
     struct Word {
         size_t from, to; // bytes of the text
         std::string folded;
     };
+
     std::vector<Word> list;
     for (size_t i = 0; i < text.size();) {
         if (ChatSeparator(static_cast<unsigned char>(text[i]))) {
@@ -794,8 +744,7 @@ std::string CensorChat(std::string_view text, const std::vector<std::string>& wo
 
 std::string WordListKey(int index) { return "wl" + std::to_string(index); }
 
-std::vector<std::string> PackWordList(const std::vector<std::string>& words)
-{
+std::vector<std::string> PackWordList(const std::vector<std::string>& words) {
     std::vector<std::string> values;
     std::string current;
     for (const std::string& w : words) {
@@ -812,8 +761,7 @@ std::vector<std::string> PackWordList(const std::vector<std::string>& words)
     return values;
 }
 
-std::vector<std::string> UnpackWordList(const std::vector<std::string>& values)
-{
+std::vector<std::string> UnpackWordList(const std::vector<std::string>& values) {
     std::vector<std::string> words;
     for (const std::string& v : values) {
         for (std::string_view w : Split(v, ',')) {
@@ -823,8 +771,7 @@ std::vector<std::string> UnpackWordList(const std::vector<std::string>& values)
     return words;
 }
 
-std::string WordListHash(const std::vector<std::string>& words)
-{
+std::string WordListHash(const std::vector<std::string>& words) {
     uint64_t h = 1469598103934665603ull; // FNV-1a
     for (const std::string& w : words) {
         for (char c : w) h = (h ^ static_cast<unsigned char>(c)) * 1099511628211ull;
@@ -835,8 +782,7 @@ std::string WordListHash(const std::vector<std::string>& words)
     return hex;
 }
 
-std::string FormatMask(const std::map<uint32_t, int>& numbers)
-{
+std::string FormatMask(const std::map<uint32_t, int>& numbers) {
     std::string s;
     for (const auto& [id, n] : numbers) {
         if (!s.empty()) s += ',';
@@ -845,8 +791,7 @@ std::string FormatMask(const std::map<uint32_t, int>& numbers)
     return s;
 }
 
-std::map<uint32_t, int> ParseMask(std::string_view text)
-{
+std::map<uint32_t, int> ParseMask(std::string_view text) {
     std::map<uint32_t, int> numbers;
     if (text.empty()) return numbers;
     for (std::string_view part : Split(text, ',')) {
@@ -859,8 +804,7 @@ std::map<uint32_t, int> ParseMask(std::string_view text)
     return numbers;
 }
 
-void FormatPing(bool pong, uint64_t clockUs, uint8_t (&out)[kPingSize])
-{
+void FormatPing(bool pong, uint64_t clockUs, uint8_t (&out)[kPingSize]) {
     out[0] = 'S';
     out[1] = 'F';
     out[2] = 'V';
@@ -869,8 +813,7 @@ void FormatPing(bool pong, uint64_t clockUs, uint8_t (&out)[kPingSize])
     for (int i = 0; i < 8; i++) out[5 + i] = static_cast<uint8_t>(clockUs >> (8 * i));
 }
 
-bool ParsePing(const uint8_t* data, size_t size, bool* pong, uint64_t* clockUs)
-{
+bool ParsePing(const uint8_t* data, size_t size, bool* pong, uint64_t* clockUs) {
     if (size != kPingSize || data[0] != 'S' || data[1] != 'F' || data[2] != 'V' || data[3] != 'P' || (data[4] != 1 && data[4] != 2))
         return false;
     *pong = data[4] == 2;
@@ -880,10 +823,10 @@ bool ParsePing(const uint8_t* data, size_t size, bool* pong, uint64_t* clockUs)
 }
 
 std::string StateKey(int table) { return "s" + std::to_string(table); }
+
 std::string QueueKey(int table) { return "q" + std::to_string(table); }
 
-std::string FormatIds(const std::vector<uint32_t>& ids)
-{
+std::string FormatIds(const std::vector<uint32_t>& ids) {
     std::string s;
     for (uint32_t id : ids) {
         if (!s.empty()) s += ',';
@@ -892,8 +835,7 @@ std::string FormatIds(const std::vector<uint32_t>& ids)
     return s;
 }
 
-std::vector<uint32_t> ParseIds(std::string_view text)
-{
+std::vector<uint32_t> ParseIds(std::string_view text) {
     std::vector<uint32_t> ids;
     if (text.empty()) return ids;
     for (std::string_view part : Split(text, ',')) {
@@ -904,8 +846,7 @@ std::vector<uint32_t> ParseIds(std::string_view text)
 }
 
 // "<phase>|<p1>|<p2>|<ready bits>|<w1>|<w2>|<code>|<stayer>|<streak>|<last winner>|<last loser>|<lw>|<ll>"
-std::string FormatTable(const TableState& s)
-{
+std::string FormatTable(const TableState& s) {
     return std::string(1, static_cast<char>(s.phase)) + "|" + std::to_string(s.seat[0]) + "|" + std::to_string(s.seat[1]) + "|" +
            std::to_string((s.ready[0] ? 1 : 0) | (s.ready[1] ? 2 : 0)) + "|" + std::to_string(s.wins[0]) + "|" +
            std::to_string(s.wins[1]) + "|" + s.code + "|" + std::to_string(s.stayer) + "|" + std::to_string(s.streak) + "|" +
@@ -913,8 +854,7 @@ std::string FormatTable(const TableState& s)
            std::to_string(s.lastScore[1]) + "|" + std::to_string(s.call) + "|" + std::to_string(s.callSeconds) + "|" + s.watch + "|" + (s.again ? "1" : "0");
 }
 
-bool ParseTable(std::string_view text, TableState* out)
-{
+bool ParseTable(std::string_view text, TableState* out) {
     const auto f = Split(text, '|');
     // 17 since playing on (again), 16 since the relay (its room), 15 before.
     if (f.size() < 15 || f.size() > 17 || f[0].size() != 1) return false;
@@ -948,8 +888,7 @@ bool ParseTable(std::string_view text, TableState* out)
     return true;
 }
 
-void FillSeats(TableState* s, std::vector<uint32_t>* queue)
-{
+void FillSeats(TableState* s, std::vector<uint32_t>* queue) {
     for (int i = 0; i < 2; i++) {
         if (s->seat[i] || queue->empty()) continue;
         s->seat[i] = queue->front();
@@ -961,8 +900,7 @@ void FillSeats(TableState* s, std::vector<uint32_t>* queue)
     s->phase = s->seat[0] && s->seat[1] ? TablePhase::Call : TablePhase::Open;
 }
 
-void ApplySetResult(const Rules& rules, int winnerSeat, const uint8_t (&games)[2], TableState* s, std::vector<uint32_t>* queue)
-{
+void ApplySetResult(const Rules& rules, int winnerSeat, const uint8_t (&games)[2], TableState* s, std::vector<uint32_t>* queue) {
     const int w = winnerSeat == 1 ? 1 : 0;
     const uint32_t winner = s->seat[w], loser = s->seat[1 - w];
     // The set before this one: who played it as well has now played two in
@@ -978,7 +916,7 @@ void ApplySetResult(const Rules& rules, int winnerSeat, const uint8_t (&games)[2
     uint32_t stays = 0;
     if (rules.rotation == Rotation::WinnerStays) stays = winner;
     else if (rules.rotation == Rotation::LoserStays) stays = loser;
-    const int played = stays && stays == s->stayer ? s->streak + 1 : 1; // sets in a row, this one counted
+    const int played = stays && stays == s->stayer ? s->streak + 1 : 1;     // sets in a row, this one counted
     if (stays && rules.staysLimit && played >= rules.staysLimit) stays = 0; // done: they go too
     auto toBack = [&](uint32_t id) {
         if (!id) return;
@@ -995,8 +933,7 @@ void ApplySetResult(const Rules& rules, int winnerSeat, const uint8_t (&games)[2
     if (winnerFirst) {
         if (winner != stays) toBack(winner);
         if (loser != stays) toBack(loser);
-    }
-    else {
+    } else {
         if (loser != stays) toBack(loser);
         if (winner != stays) toBack(winner);
     }
@@ -1008,8 +945,7 @@ void ApplySetResult(const Rules& rules, int winnerSeat, const uint8_t (&games)[2
     s->phase = TablePhase::After;
 }
 
-bool LeaveTable(uint32_t id, TableState* s, std::vector<uint32_t>* queue)
-{
+bool LeaveTable(uint32_t id, TableState* s, std::vector<uint32_t>* queue) {
     bool was = false;
     for (int i = 0; i < 2; i++) {
         if (s->seat[i] == id) {
@@ -1028,16 +964,14 @@ bool LeaveTable(uint32_t id, TableState* s, std::vector<uint32_t>* queue)
     return was;
 }
 
-std::string FormatTicket(const TableTicket& t)
-{
+std::string FormatTicket(const TableTicket& t) {
     char token[17];
     std::snprintf(token, sizeof(token), "%016llx", static_cast<unsigned long long>(t.token));
     if (t.host) return "host|" + std::to_string(t.table) + "|" + token + "|" + t.rules;
     return "join|" + std::to_string(t.table) + "|" + t.code + "|" + token + "|" + t.rules;
 }
 
-bool ParseTicket(std::string_view text, TableTicket* out)
-{
+bool ParseTicket(std::string_view text, TableTicket* out) {
     const auto f = Split(text, '|');
     TableTicket t;
     if (f.size() == 4 && f[0] == "host") t.host = true;
@@ -1056,8 +990,7 @@ bool ParseTicket(std::string_view text, TableTicket* out)
     return true;
 }
 
-uint32_t NextOwner(const std::vector<uint32_t>& joinOrder, uint32_t leaving, uint32_t keeper)
-{
+uint32_t NextOwner(const std::vector<uint32_t>& joinOrder, uint32_t leaving, uint32_t keeper) {
     for (uint32_t id : joinOrder) {
         if (id != leaving && id != keeper && id != 0) return id;
     }

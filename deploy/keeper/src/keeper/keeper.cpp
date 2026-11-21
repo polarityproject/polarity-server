@@ -23,8 +23,8 @@ std::string Str(const char* p, uint32_t len) { return p ? std::string(p, len) : 
 
 // A session message on the netplay driver's control channel (its Mux tag).
 constexpr uint8_t kControlChannel = 1;
-void SendLobby(WeyveClient* c, uint64_t to, const lobby::Message& m)
-{
+
+void SendLobby(WeyveClient* c, uint64_t to, const lobby::Message& m) {
     if (!c) return;
     const std::vector<uint8_t> bytes = lobby::Encode(m);
     std::vector<uint8_t> tagged(bytes.size() + 1);
@@ -33,45 +33,43 @@ void SendLobby(WeyveClient* c, uint64_t to, const lobby::Message& m)
     weyve_send_p2p(c, static_cast<uint32_t>(to), tagged.data(), static_cast<uint32_t>(tagged.size()));
 }
 
-const char* RoomErrorText(WeyveRoomError e)
-{
+const char* RoomErrorText(WeyveRoomError e) {
     switch (e) {
-    case WEYVE_ROOM_ERROR_ALREADY_IN_ROOM: return "already in a room";
-    case WEYVE_ROOM_ERROR_NO_SUCH_ROOM: return "no such room";
-    case WEYVE_ROOM_ERROR_NOT_IN_ROOM: return "not in a room";
-    case WEYVE_ROOM_ERROR_NOT_HOST: return "not the host";
-    case WEYVE_ROOM_ERROR_BAD_ROOM_DATA: return "bad room data";
-    case WEYVE_ROOM_ERROR_NO_SUCH_MEMBER: return "no such member";
-    case WEYVE_ROOM_ERROR_ROOM_CLOSED: return "the room is closed";
-    case WEYVE_ROOM_ERROR_BAD_PASSWORD: return "wrong password";
-    case WEYVE_ROOM_ERROR_BANNED: return "banned";
-    case WEYVE_ROOM_ERROR_RATE_LIMITED: return "rate limited";
+        case WEYVE_ROOM_ERROR_ALREADY_IN_ROOM: return "already in a room";
+        case WEYVE_ROOM_ERROR_NO_SUCH_ROOM: return "no such room";
+        case WEYVE_ROOM_ERROR_NOT_IN_ROOM: return "not in a room";
+        case WEYVE_ROOM_ERROR_NOT_HOST: return "not the host";
+        case WEYVE_ROOM_ERROR_BAD_ROOM_DATA: return "bad room data";
+        case WEYVE_ROOM_ERROR_NO_SUCH_MEMBER: return "no such member";
+        case WEYVE_ROOM_ERROR_ROOM_CLOSED: return "the room is closed";
+        case WEYVE_ROOM_ERROR_BAD_PASSWORD: return "wrong password";
+        case WEYVE_ROOM_ERROR_BANNED: return "banned";
+        case WEYVE_ROOM_ERROR_RATE_LIMITED: return "rate limited";
     }
     return "room error";
 }
 
-constexpr int64_t kResendMs = 250;        // an answer goes again until acknowledged
+constexpr int64_t kResendMs = 250; // an answer goes again until acknowledged
 constexpr int64_t kAnswerForMs = 20000;
-constexpr int64_t kReconnectMs = 5000;    // the lobby's connection, after losing the server
-constexpr int64_t kOwnerWaitMs = 30000;   // a new room closes if its owner never comes
+constexpr int64_t kReconnectMs = 5000;  // the lobby's connection, after losing the server
+constexpr int64_t kOwnerWaitMs = 30000; // a new room closes if its owner never comes
 constexpr int64_t kEmptyCloseMs = 3000;
-constexpr int64_t kListEveryMs = 2000;    // the public list and the lobby's count, at most this often
+constexpr int64_t kListEveryMs = 2000; // the public list and the lobby's count, at most this often
 constexpr int64_t kRoomAskEveryMs = 10000;
 constexpr int64_t kPeekEveryMs = 500;
 // The your-turn card shows a call's time less 1.5 s (the trip): 20 s to ready
 // (user, 2026-11-07: a player called while watching another table leaves
 // that match first, and the call's time runs meanwhile).
 constexpr int kCallSeconds = 21;
-constexpr int kBrokeOffCallSeconds = 26; // after a set that broke off: its players are still leaving the battle
-constexpr int64_t kConnectMs = 45000;    // P1 opens the match room and says its code
-constexpr int64_t kAfterMs = 5000;       // the after-set panels, then the rotation
+constexpr int kBrokeOffCallSeconds = 26;  // after a set that broke off: its players are still leaving the battle
+constexpr int64_t kConnectMs = 45000;     // P1 opens the match room and says its code
+constexpr int64_t kAfterMs = 5000;        // the after-set panels, then the rotation
 constexpr int64_t kConnectWaitMs = 30000; // a connect not over by then counts as failed
 constexpr int kConnectThreads = 4;
 
 } // namespace
 
-Keeper::Keeper(KeeperOptions options) : o_(std::move(options))
-{
+Keeper::Keeper(KeeperOptions options) : o_(std::move(options)) {
     listRev_ = static_cast<uint64_t>(
         std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
     connector_ = std::make_unique<Connector<WeyveClient>>(
@@ -85,8 +83,7 @@ Keeper::Keeper(KeeperOptions options) : o_(std::move(options))
         kConnectThreads);
 }
 
-Keeper::~Keeper()
-{
+Keeper::~Keeper() {
     for (auto& r : rooms_) {
         for (auto& relay : r->relays) {
             if (relay->up) weyve_client_destroy(relay->up);
@@ -98,8 +95,7 @@ Keeper::~Keeper()
     connector_.reset(); // its workers stop; what they held is destroyed
 }
 
-void Keeper::Log(const char* format, ...) const
-{
+void Keeper::Log(const char* format, ...) const {
     char line[1024];
     va_list args;
     va_start(args, format);
@@ -113,8 +109,7 @@ std::string Keeper::LobbyCode() const { return lobby_ && lobby_->inRoom ? lobby_
 
 size_t Keeper::CustomRooms() const { return rooms_.size(); }
 
-WeyveClient* Keeper::NewClient() const
-{
+WeyveClient* Keeper::NewClient() const {
     // On a Connector worker: a connect that waits (a firewall dropping new
     // connections, TCP retrying, a slow name lookup) holds up no room.
     WeyveClient* c = weyve_client_create();
@@ -128,15 +123,13 @@ WeyveClient* Keeper::NewClient() const
     return c;
 }
 
-void Keeper::Ask(uint64_t& ticket, int64_t& askedMs, int64_t nowMs)
-{
+void Keeper::Ask(uint64_t& ticket, int64_t& askedMs, int64_t nowMs) {
     if (ticket) return;
     ticket = connector_->Request();
     askedMs = nowMs;
 }
 
-bool Keeper::Arrived(uint64_t& ticket, int64_t askedMs, int64_t nowMs, WeyveClient** client)
-{
+bool Keeper::Arrived(uint64_t& ticket, int64_t askedMs, int64_t nowMs, WeyveClient** client) {
     if (!ticket) return false;
     double took = 0;
     if (!connector_->Take(ticket, client, &took)) {
@@ -154,14 +147,12 @@ bool Keeper::Arrived(uint64_t& ticket, int64_t askedMs, int64_t nowMs, WeyveClie
     return true;
 }
 
-void Keeper::Retire(WeyveClient*& client)
-{
+void Keeper::Retire(WeyveClient*& client) {
     connector_->Retire(client);
     client = nullptr;
 }
 
-bool Keeper::Start(int64_t nowMs)
-{
+bool Keeper::Start(int64_t nowMs) {
     now_ = nowMs;
     const std::vector<std::string> kept = LoadState();
     lobby_ = std::make_unique<Room>();
@@ -184,8 +175,7 @@ bool Keeper::Start(int64_t nowMs)
     return true;
 }
 
-void Keeper::ConnectedLobby(int64_t nowMs)
-{
+void Keeper::ConnectedLobby(int64_t nowMs) {
     (void)nowMs;
     Log("keeper: connected to %s:%u%s", o_.host.c_str(), o_.port, everConnected_ ? " again" : "");
     everConnected_ = true;
@@ -197,29 +187,25 @@ void Keeper::ConnectedLobby(int64_t nowMs)
     if (!lobby_->code.empty()) {
         Log("keeper: rejoining lobby channel %s", lobby_->code.c_str());
         weyve_join_room(lobby_->client, lobby_->code.c_str(), nullptr);
-    }
-    else {
+    } else {
         FindLobby(*lobby_);
     }
     lobby_->joinAsked = true;
 }
 
-void Keeper::ConnectedRoom(Room& room, int64_t nowMs)
-{
+void Keeper::ConnectedRoom(Room& room, int64_t nowMs) {
     (void)nowMs;
     if (room.reclaimed) {
         // Kept from before a restart.
         Log("keeper: rejoining custom room %s", room.code.c_str());
         weyve_join_room(room.client, room.code.c_str(), nullptr);
-    }
-    else {
+    } else {
         weyve_create_room(room.client);
     }
     room.joinAsked = true;
 }
 
-void Keeper::Step(int64_t nowMs)
-{
+void Keeper::Step(int64_t nowMs) {
     now_ = nowMs;
     if (!lobby_) return;
     const auto stepStart = std::chrono::steady_clock::now();
@@ -230,15 +216,13 @@ void Keeper::Step(int64_t nowMs)
             if (c) {
                 lobby_->client = c;
                 ConnectedLobby(nowMs);
-            }
-            else {
+            } else {
                 Log("keeper: cannot connect to %s:%u; trying again in %lld s", o_.host.c_str(), o_.port,
                     static_cast<long long>(kReconnectMs / 1000));
                 lobby_->reconnectMs = nowMs + kReconnectMs;
             }
         }
-    }
-    else if (!lobby_->client && nowMs >= lobby_->reconnectMs) {
+    } else if (!lobby_->client && nowMs >= lobby_->reconnectMs) {
         Ask(lobby_->connecting, lobby_->connectAskedMs, nowMs);
     }
     for (auto& r : rooms_) {
@@ -280,8 +264,7 @@ void Keeper::Step(int64_t nowMs)
     }
 }
 
-void Keeper::Pump(Room& room, int64_t nowMs)
-{
+void Keeper::Pump(Room& room, int64_t nowMs) {
     WeyveClient* c = room.client;
     if (!weyve_poll(c)) {
         if (room.kind == Kind::Lobby) {
@@ -291,8 +274,7 @@ void Keeper::Pump(Room& room, int64_t nowMs)
             Retire(room.client);
             room.inRoom = room.host = room.setUp = false;
             room.reconnectMs = nowMs + kReconnectMs;
-        }
-        else {
+        } else {
             Close(room, "lost the server");
         }
         return;
@@ -301,64 +283,62 @@ void Keeper::Pump(Room& room, int64_t nowMs)
     WeyveEvent e;
     while (room.client && weyve_next(c, &e)) {
         switch (e.type) {
-        case WEYVE_EVENT_ROOM_ID_ASSIGNED:
-            OnInRoom(room, Str(e.data.room_assigned.id, e.data.room_assigned.id_len), nowMs);
-            break;
-        case WEYVE_EVENT_ROOM_ERROR: {
-            const WeyveRoomError code = e.data.room_error.code;
-            Log("keeper: room %s: %s %s", room.code.empty() ? "(new)" : room.code.c_str(), RoomErrorText(code),
-                Str(e.data.room_error.context, e.data.room_error.context_len).c_str());
-            if (!room.inRoom && code == WEYVE_ROOM_ERROR_NO_SUCH_ROOM) {
-                if (room.kind == Kind::Lobby) {
-                    Log("keeper: lobby channel %s is gone; looking for another", room.code.c_str());
-                    room.code.clear();
-                    FindLobby(room);
+            case WEYVE_EVENT_ROOM_ID_ASSIGNED:
+                OnInRoom(room, Str(e.data.room_assigned.id, e.data.room_assigned.id_len), nowMs);
+                break;
+            case WEYVE_EVENT_ROOM_ERROR: {
+                const WeyveRoomError code = e.data.room_error.code;
+                Log("keeper: room %s: %s %s", room.code.empty() ? "(new)" : room.code.c_str(), RoomErrorText(code),
+                    Str(e.data.room_error.context, e.data.room_error.context_len).c_str());
+                if (!room.inRoom && code == WEYVE_ROOM_ERROR_NO_SUCH_ROOM) {
+                    if (room.kind == Kind::Lobby) {
+                        Log("keeper: lobby channel %s is gone; looking for another", room.code.c_str());
+                        room.code.clear();
+                        FindLobby(room);
+                    } else {
+                        Close(room, "gone");
+                    }
                 }
-                else {
-                    Close(room, "gone");
+                break;
+            }
+            case WEYVE_EVENT_ROOM_LIST:
+                if (room.kind == Kind::Lobby && room.lobbyListAsked) OnLobbyList(room);
+                break;
+            case WEYVE_EVENT_PEER_JOINED:
+                if (e.data.peer_joined.id != self)
+                    OnJoined(room, e.data.peer_joined.id, Str(e.data.peer_joined.name, e.data.peer_joined.name_len), nowMs);
+                break;
+            case WEYVE_EVENT_PEER_LEFT:
+                if (e.data.peer_left.id == self) {
+                    room.inRoom = false;
+                } else {
+                    OnLeft(room, e.data.peer_left.id, nowMs);
                 }
+                break;
+            case WEYVE_EVENT_HOST_CHANGED: {
+                const bool now = e.data.host_changed.id == self;
+                if (now != room.host) Log("keeper: room %s: %s", room.code.c_str(), now ? "host again" : "host is a player now");
+                room.host = now;
+                if (now) SetUpAsHost(room, nowMs);
+                else room.setUp = false;
+                break;
             }
-            break;
-        }
-        case WEYVE_EVENT_ROOM_LIST:
-            if (room.kind == Kind::Lobby && room.lobbyListAsked) OnLobbyList(room);
-            break;
-        case WEYVE_EVENT_PEER_JOINED:
-            if (e.data.peer_joined.id != self)
-                OnJoined(room, e.data.peer_joined.id, Str(e.data.peer_joined.name, e.data.peer_joined.name_len), nowMs);
-            break;
-        case WEYVE_EVENT_PEER_LEFT:
-            if (e.data.peer_left.id == self) {
-                room.inRoom = false;
-            }
-            else {
-                OnLeft(room, e.data.peer_left.id, nowMs);
-            }
-            break;
-        case WEYVE_EVENT_HOST_CHANGED: {
-            const bool now = e.data.host_changed.id == self;
-            if (now != room.host) Log("keeper: room %s: %s", room.code.c_str(), now ? "host again" : "host is a player now");
-            room.host = now;
-            if (now) SetUpAsHost(room, nowMs);
-            else room.setUp = false;
-            break;
-        }
-        case WEYVE_EVENT_MEMBER_DATA_CHANGED:
-            if (e.data.member_data.id != self)
-                OnMemberData(room, e.data.member_data.id, Str(e.data.member_data.key, e.data.member_data.key_len),
-                             Str(e.data.member_data.value, e.data.member_data.value_len), nowMs);
-            break;
-        case WEYVE_EVENT_CHAT:
-            if (e.data.chat.from != self) OnChat(room, e.data.chat.from, Str(e.data.chat.text, e.data.chat.text_len), nowMs);
-            break;
-        case WEYVE_EVENT_KICKED:
-        case WEYVE_EVENT_BANNED:
-            Log("keeper: removed from room %s", room.code.c_str());
-            if (room.kind == Kind::Custom) Close(room, "removed");
-            else room.inRoom = false;
-            break;
-        default:
-            break;
+            case WEYVE_EVENT_MEMBER_DATA_CHANGED:
+                if (e.data.member_data.id != self)
+                    OnMemberData(room, e.data.member_data.id, Str(e.data.member_data.key, e.data.member_data.key_len),
+                                 Str(e.data.member_data.value, e.data.member_data.value_len), nowMs);
+                break;
+            case WEYVE_EVENT_CHAT:
+                if (e.data.chat.from != self) OnChat(room, e.data.chat.from, Str(e.data.chat.text, e.data.chat.text_len), nowMs);
+                break;
+            case WEYVE_EVENT_KICKED:
+            case WEYVE_EVENT_BANNED:
+                Log("keeper: removed from room %s", room.code.c_str());
+                if (room.kind == Kind::Custom) Close(room, "removed");
+                else room.inRoom = false;
+                break;
+            default:
+                break;
         }
     }
     if (!room.client) return;
@@ -374,16 +354,14 @@ void Keeper::Pump(Room& room, int64_t nowMs)
 // A second channel split them: the hubs pick the busiest, so they stayed in
 // the old one with no keeper ("custom rooms are not available", 2026-11-05).
 // That one is joined; the players hand its host back to the keeper.
-void Keeper::FindLobby(Room& room)
-{
+void Keeper::FindLobby(Room& room) {
     const std::string build = std::to_string(o_.protocol);
     const WeyveRoomFilter filters[] = {{kKind, WEYVE_FILTER_EQUALS, kKindLobby}, {kBuild, WEYVE_FILTER_EQUALS, build.c_str()}};
     room.lobbyListAsked = weyve_list_rooms(room.client, filters, 2);
     if (!room.lobbyListAsked) weyve_create_room(room.client);
 }
 
-void Keeper::OnLobbyList(Room& room)
-{
+void Keeper::OnLobbyList(Room& room) {
     room.lobbyListAsked = false;
     std::string best;
     uint32_t bestCount = 0;
@@ -407,8 +385,7 @@ void Keeper::OnLobbyList(Room& room)
     weyve_join_room(room.client, best.c_str(), nullptr);
 }
 
-void Keeper::OnInRoom(Room& room, const std::string& code, int64_t nowMs)
-{
+void Keeper::OnInRoom(Room& room, const std::string& code, int64_t nowMs) {
     WeyveClient* c = room.client;
     const uint32_t self = weyve_id(c);
     room.code = code;
@@ -419,8 +396,7 @@ void Keeper::OnInRoom(Room& room, const std::string& code, int64_t nowMs)
     uint8_t signature[64];
     if (Sign(o_.key, reinterpret_cast<const uint8_t*>(message.data()), message.size(), signature)) {
         weyve_set_member_data(c, kProof, Base64Encode(signature, sizeof(signature)).c_str());
-    }
-    else {
+    } else {
         Log("keeper: cannot sign the proof for room %s", code.c_str());
     }
     // The members already there (a rejoin after a restart).
@@ -437,8 +413,7 @@ void Keeper::OnInRoom(Room& room, const std::string& code, int64_t nowMs)
     if (room.kind == Kind::Lobby) {
         Log("keeper: lobby channel %s (%s, %zu members)", code.c_str(), room.host ? "host" : "waiting for host",
             room.members.size());
-    }
-    else {
+    } else {
         if (room.reclaimed) ReadBackCustom(room);
         if (room.closing) return;
         Log("keeper: custom room %s, %s, %d tables, %s (%s)", code.c_str(), FormatTitle(room.settings.title).c_str(),
@@ -452,8 +427,7 @@ void Keeper::OnInRoom(Room& room, const std::string& code, int64_t nowMs)
     SaveState();
 }
 
-void Keeper::ReadBackCustom(Room& room)
-{
+void Keeper::ReadBackCustom(Room& room) {
     uint32_t len = 0;
     auto data = [&](const char* key) {
         const char* v = weyve_room_data(room.client, key, &len);
@@ -475,8 +449,7 @@ void Keeper::ReadBackCustom(Room& room)
     }
 }
 
-void Keeper::SetUpAsHost(Room& room, int64_t nowMs)
-{
+void Keeper::SetUpAsHost(Room& room, int64_t nowMs) {
     WeyveClient* c = room.client;
     // Anything a player wrote while host is written over.
     room.written.clear();
@@ -491,8 +464,7 @@ void Keeper::SetUpAsHost(Room& room, int64_t nowMs)
         WriteData(room, kKind, kKindLobby);
         WriteData(room, kBuild, std::to_string(o_.protocol));
         listWrittenMs_ = -1;
-    }
-    else {
+    } else {
         // Listed by WriteListings once it is a public room with its owner in.
         weyve_set_room_listed(c, false);
         WriteData(room, kKind, kKindCustom);
@@ -520,8 +492,7 @@ void Keeper::SetUpAsHost(Room& room, int64_t nowMs)
     room.setUp = true;
 }
 
-void Keeper::OnJoined(Room& room, uint32_t id, const std::string& name, int64_t nowMs)
-{
+void Keeper::OnJoined(Room& room, uint32_t id, const std::string& name, int64_t nowMs) {
     if (room.members.count(id)) return; // seen already (the member list on a rejoin, then its join events)
     Member& m = room.members[id];
     m.id = id;
@@ -537,15 +508,13 @@ void Keeper::OnJoined(Room& room, uint32_t id, const std::string& name, int64_t 
             // Joined between the room filling and it closing to joiners.
             Log("keeper: room %s is full: removing %u", room.code.c_str(), id);
             weyve_kick_member(room.client, id);
-        }
-        else if (room.host && Count(room) >= kRoomCap) {
+        } else if (room.host && Count(room) >= kRoomCap) {
             weyve_set_room_joinable(room.client, false);
         }
     }
 }
 
-void Keeper::OnLeft(Room& room, uint32_t id, int64_t nowMs)
-{
+void Keeper::OnLeft(Room& room, uint32_t id, int64_t nowMs) {
     const auto it = room.members.find(id);
     if (it == room.members.end()) return;
     const std::string name = it->second.name;
@@ -569,8 +538,7 @@ void Keeper::OnLeft(Room& room, uint32_t id, int64_t nowMs)
     if (room.members.empty()) room.emptySinceMs = nowMs;
 }
 
-void Keeper::OnMemberData(Room& room, uint32_t id, const std::string& key, const std::string& value, int64_t nowMs)
-{
+void Keeper::OnMemberData(Room& room, uint32_t id, const std::string& key, const std::string& value, int64_t nowMs) {
     auto it = room.members.find(id);
     if (it == room.members.end()) {
         if (key == kRequest && !value.empty() && room.kind == Kind::Custom)
@@ -580,8 +548,7 @@ void Keeper::OnMemberData(Room& room, uint32_t id, const std::string& key, const
     Member& m = it->second;
     if (key == "ch") {
         m.chara = value.substr(0, 3);
-    }
-    else if (key == "@cc") {
+    } else if (key == "@cc") {
         // The rooms server's own: the member's country from their address
         // (polarity-server docker/weyvelength-geoip.patch; clients cannot set '@'
         // keys). Two letters (ISO 3166 alpha-2) or nothing: it goes out on the
@@ -589,18 +556,15 @@ void Keeper::OnMemberData(Room& room, uint32_t id, const std::string& key, const
         const bool ok = value.size() == 2 && std::isupper(static_cast<unsigned char>(value[0])) &&
                         std::isupper(static_cast<unsigned char>(value[1]));
         m.country = ok ? value : std::string();
-    }
-    else if (key == kVersion) {
+    } else if (key == kVersion) {
         m.version = value.substr(0, kVersionMax);
         if (room.kind == Kind::Custom && !room.version.empty() && !m.version.empty() && m.version != room.version)
             Log("keeper: room %s: %s (%u) runs Polarity %s, the room %s", room.code.c_str(), m.name.c_str(), id, m.version.c_str(),
                 room.version.c_str());
-    }
-    else if (key == kAck) {
+    } else if (key == kAck) {
         const uint32_t seq = static_cast<uint32_t>(std::strtoul(value.c_str(), nullptr, 10));
         std::erase_if(room.outbox, [&](const Outgoing& o) { return o.to == id && o.seq <= seq; });
-    }
-    else if (key == kRequest && !value.empty()) {
+    } else if (key == kRequest && !value.empty()) {
         Request r;
         if (!ParseRequest(value, &r)) {
             Log("keeper: room %s: member %u sent a request that does not parse", room.code.c_str(), id);
@@ -612,8 +576,7 @@ void Keeper::OnMemberData(Room& room, uint32_t id, const std::string& key, const
     }
 }
 
-void Keeper::OnRequest(Room& room, Member& m, const Request& request, int64_t nowMs)
-{
+void Keeper::OnRequest(Room& room, Member& m, const Request& request, int64_t nowMs) {
     {
         // Known kinds only: what members send is theirs (no unbounded label values).
         static const char* const kKinds[] = {"peek", "room", "seat", "stand", "queue", "unqueue", "ready", "decline",
@@ -663,8 +626,7 @@ void Keeper::OnRequest(Room& room, Member& m, const Request& request, int64_t no
     Answer(room, m.id, {request.seq, request.kind, false, "unknown request"}, nowMs);
 }
 
-void Keeper::Answer(Room& room, uint32_t to, const keeper::Answer& answer, int64_t nowMs)
-{
+void Keeper::Answer(Room& room, uint32_t to, const keeper::Answer& answer, int64_t nowMs) {
     Log("keeper: answer %u #%u %s: %s %s", to, answer.seq, answer.kind.c_str(), answer.ok ? "ok" : "no",
         answer.text.c_str());
     stats_.answers++;
@@ -672,8 +634,7 @@ void Keeper::Answer(Room& room, uint32_t to, const keeper::Answer& answer, int64
     SendOutbox(room, nowMs);
 }
 
-void Keeper::SendOutbox(Room& room, int64_t nowMs)
-{
+void Keeper::SendOutbox(Room& room, int64_t nowMs) {
     if (!room.client) return;
     std::erase_if(room.outbox, [&](const Outgoing& o) { return nowMs >= o.untilMs; });
     for (Outgoing& o : room.outbox) {
@@ -684,8 +645,7 @@ void Keeper::SendOutbox(Room& room, int64_t nowMs)
     }
 }
 
-void Keeper::OnChat(Room& room, uint32_t from, const std::string& text, int64_t nowMs)
-{
+void Keeper::OnChat(Room& room, uint32_t from, const std::string& text, int64_t nowMs) {
     auto it = room.members.find(from);
     if (it == room.members.end()) return;
     Member& m = it->second;
@@ -701,8 +661,7 @@ void Keeper::OnChat(Room& room, uint32_t from, const std::string& text, int64_t 
     }
 }
 
-void Keeper::WriteData(Room& room, const std::string& key, const std::string& value)
-{
+void Keeper::WriteData(Room& room, const std::string& key, const std::string& value) {
     if (!room.host) return;
     auto it = room.written.find(key);
     if (it != room.written.end() && it->second == value) return;
@@ -710,15 +669,13 @@ void Keeper::WriteData(Room& room, const std::string& key, const std::string& va
     weyve_set_room_data(room.client, key.c_str(), value.c_str());
 }
 
-void Keeper::DeleteData(Room& room, const std::string& key)
-{
+void Keeper::DeleteData(Room& room, const std::string& key) {
     if (!room.host || !room.written.count(key)) return;
     room.written.erase(key);
     weyve_delete_room_data(room.client, key.c_str());
 }
 
-void Keeper::UpdateCustom(Room& room, int64_t nowMs)
-{
+void Keeper::UpdateCustom(Room& room, int64_t nowMs) {
     if (!room.client) return;
     if (!room.inRoom) {
         if (nowMs - room.createdMs > kOwnerWaitMs) Close(room, "never got into it");
@@ -737,16 +694,14 @@ void Keeper::UpdateCustom(Room& room, int64_t nowMs)
     SendOutbox(room, nowMs);
 }
 
-void Keeper::UpdateLobby(Room& room, int64_t nowMs)
-{
+void Keeper::UpdateLobby(Room& room, int64_t nowMs) {
     if (!room.inRoom || !room.host) return;
     if (listWrittenMs_ >= 0 && nowMs - listWrittenMs_ < kListEveryMs) return;
     listWrittenMs_ = nowMs;
     WriteListings(nowMs);
 }
 
-std::string Keeper::SignText(const std::string& message) const
-{
+std::string Keeper::SignText(const std::string& message) const {
     uint8_t signature[64];
     if (!Sign(o_.key, reinterpret_cast<const uint8_t*>(message.data()), message.size(), signature)) return {};
     return Base64Encode(signature, sizeof(signature));
@@ -756,8 +711,7 @@ std::string Keeper::SignText(const std::string& message) const
 // each public room's slots, signed, set by the keeper as its host, and the
 // desk's count and summary. Players list them without joining a room. At most
 // every kListEveryMs (UpdateLobby).
-void Keeper::WriteListings(int64_t nowMs)
-{
+void Keeper::WriteListings(int64_t nowMs) {
     (void)nowMs;
     auto set = [](WeyveClient* c, Listing& had, const Listing& want) {
         for (const auto& [key, value] : want) {
@@ -830,8 +784,7 @@ void Keeper::WriteListings(int64_t nowMs)
     weyve_set_room_joinable(desk.client, Count(desk) < kLobbyCap);
 }
 
-std::vector<ListedRoom> Keeper::PublicList() const
-{
+std::vector<ListedRoom> Keeper::PublicList() const {
     std::vector<ListedRoom> list;
     for (const auto& r : rooms_) {
         if (r->closing || !r->inRoom || !r->host || !r->settings.isPublic || !r->ownerArrived || r->members.empty() || r->unlisted) continue;
@@ -856,11 +809,11 @@ std::vector<ListedRoom> Keeper::PublicList() const
             ListedRoom::TableEntry e;
             e.rules = FormatRules(t.rules);
             switch (t.s.phase) {
-            case TablePhase::Open: e.state = "open"; break;
-            case TablePhase::Call: e.state = "called"; break;
-            case TablePhase::Connecting: e.state = "connecting"; break;
-            case TablePhase::Playing: e.state = "playing"; break;
-            case TablePhase::After: e.state = "after"; break;
+                case TablePhase::Open: e.state = "open"; break;
+                case TablePhase::Call: e.state = "called"; break;
+                case TablePhase::Connecting: e.state = "connecting"; break;
+                case TablePhase::Playing: e.state = "playing"; break;
+                case TablePhase::After: e.state = "after"; break;
             }
             for (int i = 0; i < 2; i++) {
                 const uint32_t id = t.s.seat[i];
@@ -883,8 +836,7 @@ std::vector<ListedRoom> Keeper::PublicList() const
     return list;
 }
 
-Keeper::ServerStats Keeper::ReadServerStats() const
-{
+Keeper::ServerStats Keeper::ReadServerStats() const {
     ServerStats stats;
     if (o_.serverStatsPath.empty()) return stats;
     std::error_code ec;
@@ -900,8 +852,7 @@ Keeper::ServerStats Keeper::ReadServerStats() const
     return stats;
 }
 
-int Keeper::OnlineFromServer(const ServerStats& stats) const
-{
+int Keeper::OnlineFromServer(const ServerStats& stats) const {
     if (!stats.Fresh()) return -1;
     const long connections = stats.connections;
     // Connections that are not one player each: the keeper's own (a room,
@@ -922,8 +873,7 @@ int Keeper::OnlineFromServer(const ServerStats& stats) const
     return static_cast<int>(std::max(0L, connections - others));
 }
 
-int Keeper::PlayersOnline(bool* fromServer) const
-{
+int Keeper::PlayersOnline(bool* fromServer) const {
     // From the server when it says (browsing players are in no room); else a
     // player is in one room at a time (the desk or a custom room), so the
     // members add up without counting anyone twice.
@@ -938,8 +888,7 @@ int Keeper::PlayersOnline(bool* fromServer) const
     return members;
 }
 
-std::string Keeper::StatusJson(int64_t unixMs) const
-{
+std::string Keeper::StatusJson(int64_t unixMs) const {
     RoomTotals totals;
     bool fromServer = false;
     totals.online = PlayersOnline(&fromServer);
@@ -949,8 +898,7 @@ std::string Keeper::StatusJson(int64_t unixMs) const
     return FormatRoomListJson(list, totals, unixMs);
 }
 
-std::string Keeper::MetricsText()
-{
+std::string Keeper::MetricsText() {
     std::string out;
     auto line = [&](const std::string& name, const std::string& labels, double value) {
         char number[64];
@@ -1079,8 +1027,8 @@ std::string Keeper::MetricsText()
     line("sfvr_keeper_outbox", "", static_cast<double>(outbox));
     return out;
 }
-void Keeper::CheckName(Room& room, uint32_t id)
-{
+
+void Keeper::CheckName(Room& room, uint32_t id) {
     if (room.kind != Kind::Custom || !room.settings.isPublic || o_.words.empty()) return;
     const auto m = room.members.find(id);
     if (m == room.members.end() || !NameRejected(m->second.name, o_.words)) return;
@@ -1096,8 +1044,7 @@ void Keeper::CheckName(Room& room, uint32_t id)
     WriteMask(room);
 }
 
-void Keeper::WriteMask(Room& room)
-{
+void Keeper::WriteMask(Room& room) {
     if (room.kind != Kind::Custom) return;
     if (room.masked.empty()) {
         DeleteData(room, kMask);
@@ -1111,8 +1058,7 @@ void Keeper::WriteMask(Room& room)
     WriteData(room, kMask, FormatMask(numbers));
 }
 
-void Keeper::WriteWordList(Room& room)
-{
+void Keeper::WriteWordList(Room& room) {
     if (room.kind != Kind::Custom || !room.host) return;
     const std::vector<std::string> values = room.settings.isPublic ? PackWordList(o_.words) : std::vector<std::string>{};
     for (int i = 0; i < kWordListKeys; i++) {
@@ -1121,12 +1067,10 @@ void Keeper::WriteWordList(Room& room)
     }
     if (values.empty()) {
         if (room.written.count(kWordListHash)) DeleteData(room, kWordListHash);
-    }
-    else WriteData(room, kWordListHash, WordListHash(o_.words));
+    } else WriteData(room, kWordListHash, WordListHash(o_.words));
 }
 
-void Keeper::SetWords(std::vector<std::string> words)
-{
+void Keeper::SetWords(std::vector<std::string> words) {
     o_.words = std::move(words);
     Log("keeper: word list: %zu entries", o_.words.size());
     for (auto& r : rooms_) {
@@ -1136,8 +1080,7 @@ void Keeper::SetWords(std::vector<std::string> words)
     }
 }
 
-std::string Keeper::ShownName(const Room& room, uint32_t id) const
-{
+std::string Keeper::ShownName(const Room& room, uint32_t id) const {
     const auto m = room.members.find(id);
     if (m == room.members.end()) return {};
     if (std::find(room.masked.begin(), room.masked.end(), id) == room.masked.end()) return m->second.name;
@@ -1146,8 +1089,7 @@ std::string Keeper::ShownName(const Room& room, uint32_t id) const
     return "Player " + std::to_string(n != room.maskNumbers.end() ? n->second : 0);
 }
 
-void Keeper::Peek(Room& lobby, Member& m, const Request& request, int64_t nowMs)
-{
+void Keeper::Peek(Room& lobby, Member& m, const Request& request, int64_t nowMs) {
     if (m.lastPeekMs >= 0 && nowMs - m.lastPeekMs < kPeekEveryMs) return; // asked again soon: the last answer stands
     m.lastPeekMs = nowMs;
     const std::string code = request.args.empty() ? std::string() : request.args[0];
@@ -1177,8 +1119,7 @@ void Keeper::Peek(Room& lobby, Member& m, const Request& request, int64_t nowMs)
 
 // ---- tables ---------------------------------------------------------------------
 
-void Keeper::SetUpTables(Room& room, int64_t nowMs)
-{
+void Keeper::SetUpTables(Room& room, int64_t nowMs) {
     // Kept as they were (a keeper that restarts reads them back); new
     // tables open and empty.
     const int count = room.settings.tables;
@@ -1208,14 +1149,12 @@ void Keeper::SetUpTables(Room& room, int64_t nowMs)
     WriteTables(room);
 }
 
-void Keeper::SetPhase(Table& t, TablePhase phase, int64_t nowMs)
-{
+void Keeper::SetPhase(Table& t, TablePhase phase, int64_t nowMs) {
     t.s.phase = phase;
     t.phaseAtMs = nowMs;
 }
 
-void Keeper::Fill(Room& room, Table& t, int64_t nowMs, bool brokeOff)
-{
+void Keeper::Fill(Room& room, Table& t, int64_t nowMs, bool brokeOff) {
     FillSeats(&t.s, &t.queue);
     t.phaseAtMs = nowMs;
     if (t.s.phase == TablePhase::Call) {
@@ -1228,8 +1167,7 @@ void Keeper::Fill(Room& room, Table& t, int64_t nowMs, bool brokeOff)
     }
 }
 
-void Keeper::WriteTables(Room& room)
-{
+void Keeper::WriteTables(Room& room) {
     if (!room.host) return;
     for (int i = 0; i < static_cast<int>(room.tables.size()); i++) {
         Table& t = room.tables[i];
@@ -1244,15 +1182,13 @@ void Keeper::WriteTables(Room& room)
     }
 }
 
-void Keeper::Ticket(Room& room, uint32_t to, const TableTicket& ticket, int64_t nowMs)
-{
+void Keeper::Ticket(Room& room, uint32_t to, const TableTicket& ticket, int64_t nowMs) {
     stats_.tickets++;
     Log("keeper: room %s: ticket to %u: %s", room.code.c_str(), to, FormatTicket(ticket).c_str());
     Notice(room, to, "ticket", true, FormatTicket(ticket), nowMs);
 }
 
-void Keeper::Notice(Room& room, uint32_t to, const std::string& kind, bool ok, const std::string& text, int64_t nowMs)
-{
+void Keeper::Notice(Room& room, uint32_t to, const std::string& kind, bool ok, const std::string& text, int64_t nowMs) {
     // Sent again until acknowledged, as an answer is; numbered after the
     // player's last request, so their acknowledgement covers it.
     const auto m = room.members.find(to);
@@ -1262,8 +1198,7 @@ void Keeper::Notice(Room& room, uint32_t to, const std::string& kind, bool ok, c
     SendOutbox(room, nowMs);
 }
 
-void Keeper::OffTables(Room& room, uint32_t id, int64_t nowMs)
-{
+void Keeper::OffTables(Room& room, uint32_t id, int64_t nowMs) {
     for (Table& t : room.tables) {
         const bool seated = t.s.seat[0] == id || t.s.seat[1] == id;
         const bool inSet = t.s.phase == TablePhase::Connecting || t.s.phase == TablePhase::Playing;
@@ -1272,16 +1207,14 @@ void Keeper::OffTables(Room& room, uint32_t id, int64_t nowMs)
             // A call or a set without one of its players: the other keeps
             // the seat, the next in line takes the empty one.
             Fill(room, t, nowMs, inSet);
-        }
-        else if (t.s.phase == TablePhase::Open) {
+        } else if (t.s.phase == TablePhase::Open) {
             Fill(room, t, nowMs);
         }
     }
     WriteTables(room);
 }
 
-void Keeper::TableRequest(Room& room, Member& m, const Request& r, int64_t nowMs)
-{
+void Keeper::TableRequest(Room& room, Member& m, const Request& r, int64_t nowMs) {
     if (!room.host) { // paused: nothing moves
         Log("keeper: room %s: %s (%u) asks %s while the room is paused; ignored", room.code.c_str(), m.name.c_str(), m.id, FormatRequest(r).c_str());
         return;
@@ -1290,7 +1223,8 @@ void Keeper::TableRequest(Room& room, Member& m, const Request& r, int64_t nowMs
     int index = -1;
     if (!r.args.empty()) index = std::atoi(r.args[0].c_str());
     Table* t = index >= 0 && index < count ? &room.tables[index] : nullptr;
-    auto seatOf = [&](const Table& table) { return table.s.seat[0] == m.id ? 0 : table.s.seat[1] == m.id ? 1 : -1; };
+    auto seatOf = [&](const Table& table) { return table.s.seat[0] == m.id ? 0 : table.s.seat[1] == m.id ? 1
+                                                                                                         : -1; };
     if (r.kind == "seat" && t && r.args.size() == 2) {
         // Off any other table first (one place at a time).
         for (Table& other : room.tables) {
@@ -1307,15 +1241,13 @@ void Keeper::TableRequest(Room& room, Member& m, const Request& r, int64_t nowMs
                 if (t->s.seat[0] && t->s.seat[1]) Fill(room, *t, nowMs);
             }
         }
-    }
-    else if (r.kind == "stand") {
+    } else if (r.kind == "stand") {
         for (Table& table : room.tables) {
             if (seatOf(table) < 0) continue;
             if (table.s.phase == TablePhase::Open || table.s.phase == TablePhase::Call) {
                 LeaveTable(m.id, &table.s, &table.queue);
                 Fill(room, table, nowMs);
-            }
-            else if (table.s.phase == TablePhase::Connecting || table.s.phase == TablePhase::Playing) {
+            } else if (table.s.phase == TablePhase::Connecting || table.s.phase == TablePhase::Playing) {
                 // Cancel on the connecting modal (clients send it only before
                 // their match began): as if they had left the room, the other
                 // keeps the seat and the table is called again.
@@ -1325,8 +1257,7 @@ void Keeper::TableRequest(Room& room, Member& m, const Request& r, int64_t nowMs
                 Fill(room, table, nowMs, true);
             }
         }
-    }
-    else if (r.kind == "queue" && t) {
+    } else if (r.kind == "queue" && t) {
         for (Table& other : room.tables) {
             if (&other != t && LeaveTable(m.id, &other.s, &other.queue) && other.s.phase != TablePhase::Open) Fill(room, other, nowMs);
         }
@@ -1337,11 +1268,9 @@ void Keeper::TableRequest(Room& room, Member& m, const Request& r, int64_t nowMs
             // A table nobody waits at takes them straight into a seat.
             if (t->s.phase == TablePhase::Open) Fill(room, *t, nowMs);
         }
-    }
-    else if (r.kind == "unqueue") {
+    } else if (r.kind == "unqueue") {
         for (Table& table : room.tables) std::erase(table.queue, m.id);
-    }
-    else if (r.kind == "ready" && t && t->s.phase == TablePhase::Call) {
+    } else if (r.kind == "ready" && t && t->s.phase == TablePhase::Call) {
         const int seat = seatOf(*t);
         if (seat < 0) Log("keeper: room %s: %s (%u) readies at table %d but is not seated there; ignored", room.code.c_str(), m.name.c_str(), m.id, index + 1);
         if (seat >= 0) {
@@ -1356,15 +1285,13 @@ void Keeper::TableRequest(Room& room, Member& m, const Request& r, int64_t nowMs
                 Ticket(room, t->s.seat[0], {true, index, "", t->token, FormatRules(t->setRules)}, nowMs);
             }
         }
-    }
-    else if (r.kind == "decline" && t && seatOf(*t) >= 0 &&
-             (t->s.phase == TablePhase::Call || t->s.phase == TablePhase::Open)) {
+    } else if (r.kind == "decline" && t && seatOf(*t) >= 0 &&
+               (t->s.phase == TablePhase::Call || t->s.phase == TablePhase::Open)) {
         LeaveTable(m.id, &t->s, &t->queue);
         Log("keeper: room %s: %s leaves table %d's queue", room.code.c_str(), m.name.c_str(), index + 1);
         Fill(room, *t, nowMs);
-    }
-    else if (r.kind == "code" && t && (r.args.size() == 2 || r.args.size() == 3) && t->s.phase == TablePhase::Connecting &&
-             seatOf(*t) == 0) {
+    } else if (r.kind == "code" && t && (r.args.size() == 2 || r.args.size() == 3) && t->s.phase == TablePhase::Connecting &&
+               seatOf(*t) == 0) {
         t->s.code = r.args[1];
         t->build = r.args.size() == 3 ? r.args[2] : std::string();
         Log("keeper: room %s: table %d: P1 opened match room %s (build %s); P2's ticket goes", room.code.c_str(), index + 1, t->s.code.c_str(),
@@ -1373,9 +1300,8 @@ void Keeper::TableRequest(Room& room, Member& m, const Request& r, int64_t nowMs
         SetPhase(*t, TablePhase::Playing, nowMs);
         Ticket(room, t->s.seat[1], {false, index, t->s.code, t->token, FormatRules(t->setRules)}, nowMs);
         StartRelay(room, index, nowMs);
-    }
-    else if ((r.kind == "score" || r.kind == "result") && t && r.args.size() == 3 &&
-             (t->s.phase == TablePhase::Playing || t->s.phase == TablePhase::Connecting)) {
+    } else if ((r.kind == "score" || r.kind == "result") && t && r.args.size() == 3 &&
+               (t->s.phase == TablePhase::Playing || t->s.phase == TablePhase::Connecting)) {
         // P1 reports; P2 only once P1 is gone.
         const int seat = seatOf(*t);
         if (seat == 0 || (seat == 1 && !room.members.count(t->s.seat[0]))) {
@@ -1386,13 +1312,11 @@ void Keeper::TableRequest(Room& room, Member& m, const Request& r, int64_t nowMs
                     Log("keeper: room %s: table %d: games %d-%d", room.code.c_str(), index + 1, games[0], games[1]);
                 t->s.wins[0] = games[0];
                 t->s.wins[1] = games[1];
-            }
-            else if (games[0] == games[1]) {
+            } else if (games[0] == games[1]) {
                 stats_.sets["unfinished"]++;
                 Log("keeper: room %s: table %d's set did not finish; calling it again", room.code.c_str(), index + 1);
                 Fill(room, *t, nowMs, true);
-            }
-            else {
+            } else {
                 ApplySetResult(t->setRules, games[0] > games[1] ? 0 : 1, games, &t->s, &t->queue);
                 t->s.watch.clear(); // the set's relay serves its viewers on; nobody new
                 t->phaseAtMs = nowMs;
@@ -1401,9 +1325,8 @@ void Keeper::TableRequest(Room& room, Member& m, const Request& r, int64_t nowMs
                     t->s.lastScore[0], t->s.lastScore[1]);
             }
         }
-    }
-    else if (r.kind == "forfeit" && t && r.args.size() == 2 &&
-             (t->s.phase == TablePhase::Playing || t->s.phase == TablePhase::Connecting)) {
+    } else if (r.kind == "forfeit" && t && r.args.size() == 2 &&
+               (t->s.phase == TablePhase::Playing || t->s.phase == TablePhase::Connecting)) {
         // A player left the set (both games say so; the first counts): the
         // other wins it, the rotation runs, and the one who left is off the
         // table and its queue (user, 2026-11-04: a forfeit, not queued again).
@@ -1419,8 +1342,7 @@ void Keeper::TableRequest(Room& room, Member& m, const Request& r, int64_t nowMs
             Log("keeper: room %s: table %d: %u beat %u by forfeit (%d-%d)", room.code.c_str(), index + 1, t->s.lastWinner,
                 t->s.lastLoser, t->s.lastScore[0], t->s.lastScore[1]);
         }
-    }
-    else if (r.kind == "again" && t && r.args.size() == 3 && t->s.phase == TablePhase::Playing && seatOf(*t) == 0) {
+    } else if (r.kind == "again" && t && r.args.size() == 3 && t->s.phase == TablePhase::Playing && seatOf(*t) == 0) {
         // The set is won and both want more. Nobody else waits for the
         // table: the result goes on record and the same two play the next
         // set in the same match room, in the same seats (the rotation only
@@ -1445,15 +1367,13 @@ void Keeper::TableRequest(Room& room, Member& m, const Request& r, int64_t nowMs
             for (auto& rl : room.relays) {
                 if (!rl->ended && rl->matchCode == t->s.code && rl->core) rl->core->SetFirstTo(t->setRules.firstTo);
             }
-        }
-        else {
+        } else {
             // Someone waits (or it did not finish): the set ends as a result does.
             if (games[0] == games[1]) {
                 stats_.sets["unfinished"]++;
                 Log("keeper: room %s: table %d's set did not finish; calling it again", room.code.c_str(), index + 1);
                 Fill(room, *t, nowMs, true);
-            }
-            else {
+            } else {
                 stats_.sets["result"]++;
                 ApplySetResult(t->setRules, games[0] > games[1] ? 0 : 1, games, &t->s, &t->queue);
                 t->s.watch.clear();
@@ -1463,19 +1383,16 @@ void Keeper::TableRequest(Room& room, Member& m, const Request& r, int64_t nowMs
             }
             Notice(room, m.id, "again", false, "someone is waiting", nowMs);
         }
-    }
-    else if (r.kind == "rules" && t && r.args.size() == 2 && m.id == room.owner) {
+    } else if (r.kind == "rules" && t && r.args.size() == 2 && m.id == room.owner) {
         Rules rules;
         if (ParseRules(r.args[1], &rules)) {
             t->rules = rules;
             WriteData(room, TableKey(index), FormatRules(rules));
             Log("keeper: room %s: table %d's rules are %s from its next set", room.code.c_str(), index + 1, r.args[1].c_str());
-        }
-        else {
+        } else {
             Log("keeper: room %s: table %d: rules '%s' do not parse; kept", room.code.c_str(), index + 1, r.args[1].c_str());
         }
-    }
-    else if (r.kind == "kick" && !r.args.empty() && m.id == room.owner) {
+    } else if (r.kind == "kick" && !r.args.empty() && m.id == room.owner) {
         const uint32_t id = static_cast<uint32_t>(std::strtoul(r.args[0].c_str(), nullptr, 10));
         if (id && id != m.id && room.members.count(id)) {
             stats_.ownerKicks++;
@@ -1483,8 +1400,7 @@ void Keeper::TableRequest(Room& room, Member& m, const Request& r, int64_t nowMs
             // Barred until they reconnect (Weyvelength's ban holds the connection).
             weyve_ban_member(room.client, id);
         }
-    }
-    else {
+    } else {
         // Nothing matched: a request for a phase the table has left, a seat
         // it does not hold, or a table that is not there (races show here).
         Log("keeper: room %s: %s (%u) asks %s; ignored (table %d is %s)", room.code.c_str(), m.name.c_str(), m.id, FormatRequest(r).c_str(),
@@ -1493,8 +1409,7 @@ void Keeper::TableRequest(Room& room, Member& m, const Request& r, int64_t nowMs
     WriteTables(room);
 }
 
-void Keeper::UpdateTables(Room& room, int64_t nowMs)
-{
+void Keeper::UpdateTables(Room& room, int64_t nowMs) {
     for (int i = 0; i < static_cast<int>(room.tables.size()); i++) {
         Table& t = room.tables[i];
         const int64_t in = nowMs - t.phaseAtMs;
@@ -1518,20 +1433,17 @@ void Keeper::UpdateTables(Room& room, int64_t nowMs)
             for (int seat = 0; seat < 2; seat++) {
                 if (t.s.phase == TablePhase::Call && wasReady[seat] && t.s.seat[seat] == wasReady[seat]) t.s.ready[seat] = true;
             }
-        }
-        else if (t.s.phase == TablePhase::Connecting && in >= kConnectMs) {
+        } else if (t.s.phase == TablePhase::Connecting && in >= kConnectMs) {
             Log("keeper: room %s: table %d's match room never opened; calling again", room.code.c_str(), i + 1);
             Fill(room, t, nowMs, true);
-        }
-        else if (t.s.phase == TablePhase::After && in >= kAfterMs) {
+        } else if (t.s.phase == TablePhase::After && in >= kAfterMs) {
             Fill(room, t, nowMs);
         }
     }
     WriteTables(room);
 }
 
-void Keeper::Commands(int64_t nowMs)
-{
+void Keeper::Commands(int64_t nowMs) {
     if (o_.statePath.empty() || nowMs - commandsAtMs_ < 1000) return;
     commandsAtMs_ = nowMs;
     const std::string path = o_.statePath + ".cmd";
@@ -1557,8 +1469,7 @@ void Keeper::Commands(int64_t nowMs)
             }
             listWrittenMs_ = -1; // the list again at once
             Log("keeper: operator: %s %s%s", cmd.c_str(), arg.c_str(), found ? "" : " (no such room)");
-        }
-        else if (cmd == "word" && !arg.empty()) {
+        } else if (cmd == "word" && !arg.empty()) {
             const std::string w = WordEntry(arg);
             if (!w.empty() && std::find(o_.words.begin(), o_.words.end(), w) == o_.words.end()) {
                 std::vector<std::string> words = o_.words;
@@ -1566,23 +1477,20 @@ void Keeper::Commands(int64_t nowMs)
                 Log("keeper: operator: '%s' added to the word filter", w.c_str());
                 SetWords(std::move(words));
             }
-        }
-        else if (cmd == "rooms") {
+        } else if (cmd == "rooms") {
             Log("keeper: operator: lobby %s, %zu custom rooms", lobby_ ? lobby_->code.c_str() : "-", rooms_.size());
             for (const auto& r : rooms_) {
                 Log("keeper:   %s %s %s, %d members, %d tables%s%s", r->code.c_str(), FormatTitle(r->settings.title).c_str(),
                     r->settings.isPublic ? "public" : "private", Count(*r), r->settings.tables, r->unlisted ? ", unlisted" : "",
                     r->host ? "" : ", paused");
             }
-        }
-        else {
+        } else {
             Log("keeper: operator: unknown command '%s'", line.c_str());
         }
     }
 }
 
-void Keeper::Close(Room& room, const char* why)
-{
+void Keeper::Close(Room& room, const char* why) {
     if (room.closing) return;
     stats_.roomsClosed++;
     Log("keeper: closing room %s: %s", room.code.empty() ? "(new)" : room.code.c_str(), why);
@@ -1603,8 +1511,7 @@ void Keeper::Close(Room& room, const char* why)
 
 // ----- spectator relays (core/spectate_relay.h) ----------------------------------
 
-void Keeper::StartRelay(Room& room, int table, int64_t nowMs)
-{
+void Keeper::StartRelay(Room& room, int table, int64_t nowMs) {
     if (table < 0 || table >= static_cast<int>(room.tables.size())) return;
     Table& t = room.tables[table];
     auto r = std::make_unique<RelayLink>();
@@ -1637,8 +1544,7 @@ void Keeper::StartRelay(Room& room, int table, int64_t nowMs)
     room.relays.push_back(std::move(r));
 }
 
-void Keeper::PumpRelays(Room& room, int64_t nowMs)
-{
+void Keeper::PumpRelays(Room& room, int64_t nowMs) {
     for (auto& r : room.relays) {
         if (r->ended) continue;
         if (r->downConnecting) {
@@ -1667,8 +1573,7 @@ void Keeper::PumpRelays(Room& room, int64_t nowMs)
                     weyve_join_room(r->up, r->matchCode.c_str(), nullptr);
                     Log("keeper: room %s: table %d: a viewer; the relay joins match room %s", room.code.c_str(), r->table + 1,
                         r->matchCode.c_str());
-                }
-                else {
+                } else {
                     r->core->HostGone(nowMs);
                 }
             }
@@ -1697,8 +1602,7 @@ void Keeper::PumpRelays(Room& room, int64_t nowMs)
     std::erase_if(room.relays, [](const std::unique_ptr<RelayLink>& r) { return r->ended; });
 }
 
-void Keeper::PumpRelayUp(Room& room, RelayLink& r, int64_t nowMs)
-{
+void Keeper::PumpRelayUp(Room& room, RelayLink& r, int64_t nowMs) {
     (void)room;
     WeyveClient* c = r.up;
     if (!c) return;
@@ -1712,32 +1616,32 @@ void Keeper::PumpRelayUp(Room& room, RelayLink& r, int64_t nowMs)
     WeyveEvent e;
     while (weyve_next(c, &e)) {
         switch (e.type) {
-        case WEYVE_EVENT_ROOM_ID_ASSIGNED: {
-            r.upIn = true;
-            // The proof the host checks before it lets this member watch.
-            const std::string message = ProofMessage(r.matchCode, self);
-            uint8_t signature[64];
-            if (Sign(o_.key, reinterpret_cast<const uint8_t*>(message.data()), message.size(), signature)) {
-                weyve_set_member_data(c, kProof, Base64Encode(signature, sizeof(signature)).c_str());
+            case WEYVE_EVENT_ROOM_ID_ASSIGNED: {
+                r.upIn = true;
+                // The proof the host checks before it lets this member watch.
+                const std::string message = ProofMessage(r.matchCode, self);
+                uint8_t signature[64];
+                if (Sign(o_.key, reinterpret_cast<const uint8_t*>(message.data()), message.size(), signature)) {
+                    weyve_set_member_data(c, kProof, Base64Encode(signature, sizeof(signature)).c_str());
+                }
+                break;
             }
-            break;
-        }
-        case WEYVE_EVENT_ROOM_ERROR:
-            if (!r.upIn) {
-                Log("keeper: relay: cannot join match room %s: %s", r.matchCode.c_str(), RoomErrorText(e.data.room_error.code));
+            case WEYVE_EVENT_ROOM_ERROR:
+                if (!r.upIn) {
+                    Log("keeper: relay: cannot join match room %s: %s", r.matchCode.c_str(), RoomErrorText(e.data.room_error.code));
+                    r.core->HostGone(nowMs);
+                }
+                break;
+            case WEYVE_EVENT_PEER_LEFT:
+                if (e.data.peer_left.id == self || (r.hostId && e.data.peer_left.id == r.hostId)) r.core->HostGone(nowMs);
+                break;
+            case WEYVE_EVENT_KICKED:
+            case WEYVE_EVENT_BANNED:
+                Log("keeper: relay: removed from match room %s", r.matchCode.c_str());
                 r.core->HostGone(nowMs);
-            }
-            break;
-        case WEYVE_EVENT_PEER_LEFT:
-            if (e.data.peer_left.id == self || (r.hostId && e.data.peer_left.id == r.hostId)) r.core->HostGone(nowMs);
-            break;
-        case WEYVE_EVENT_KICKED:
-        case WEYVE_EVENT_BANNED:
-            Log("keeper: relay: removed from match room %s", r.matchCode.c_str());
-            r.core->HostGone(nowMs);
-            break;
-        default:
-            break;
+                break;
+            default:
+                break;
         }
     }
     if (r.upIn && !r.hostSet) {
@@ -1768,8 +1672,7 @@ void Keeper::PumpRelayUp(Room& room, RelayLink& r, int64_t nowMs)
     }
 }
 
-void Keeper::PumpRelayDown(Room& room, RelayLink& r, int64_t nowMs)
-{
+void Keeper::PumpRelayDown(Room& room, RelayLink& r, int64_t nowMs) {
     WeyveClient* c = r.down;
     if (!c) return;
     if (!weyve_poll(c)) {
@@ -1780,25 +1683,25 @@ void Keeper::PumpRelayDown(Room& room, RelayLink& r, int64_t nowMs)
     WeyveEvent e;
     while (weyve_next(c, &e)) {
         switch (e.type) {
-        case WEYVE_EVENT_ROOM_ID_ASSIGNED:
-            r.downIn = true;
-            r.relayCode = Str(e.data.room_assigned.id, e.data.room_assigned.id_len);
-            break;
-        case WEYVE_EVENT_ROOM_ERROR:
-            if (!r.downIn) {
-                EndRelay(room, r, "cannot make its room");
-                return;
-            }
-            break;
-        case WEYVE_EVENT_PEER_LEFT:
-            if (e.data.peer_left.id != self) r.core->ViewerGone(e.data.peer_left.id);
-            break;
-        case WEYVE_EVENT_CHAT:
-            // No Polarity build chats here (the match room's rule, M6).
-            if (e.data.chat.from != self) weyve_ban_member(c, e.data.chat.from);
-            break;
-        default:
-            break;
+            case WEYVE_EVENT_ROOM_ID_ASSIGNED:
+                r.downIn = true;
+                r.relayCode = Str(e.data.room_assigned.id, e.data.room_assigned.id_len);
+                break;
+            case WEYVE_EVENT_ROOM_ERROR:
+                if (!r.downIn) {
+                    EndRelay(room, r, "cannot make its room");
+                    return;
+                }
+                break;
+            case WEYVE_EVENT_PEER_LEFT:
+                if (e.data.peer_left.id != self) r.core->ViewerGone(e.data.peer_left.id);
+                break;
+            case WEYVE_EVENT_CHAT:
+                // No Polarity build chats here (the match room's rule, M6).
+                if (e.data.chat.from != self) weyve_ban_member(c, e.data.chat.from);
+                break;
+            default:
+                break;
         }
     }
     // The relay room says what the match room says of the build, so viewers
@@ -1822,8 +1725,7 @@ void Keeper::PumpRelayDown(Room& room, RelayLink& r, int64_t nowMs)
     }
 }
 
-void Keeper::EndRelay(Room& room, RelayLink& r, const char* why)
-{
+void Keeper::EndRelay(Room& room, RelayLink& r, const char* why) {
     if (r.ended) return;
     r.ended = true;
     const RelayStats s = r.core ? r.core->Stats() : RelayStats{};
@@ -1842,8 +1744,7 @@ void Keeper::EndRelay(Room& room, RelayLink& r, const char* why)
     }
 }
 
-std::vector<std::string> Keeper::LoadState()
-{
+std::vector<std::string> Keeper::LoadState() {
     std::vector<std::string> codes;
     if (o_.statePath.empty()) return codes;
     std::ifstream in(o_.statePath);
@@ -1862,8 +1763,7 @@ std::vector<std::string> Keeper::LoadState()
     return codes;
 }
 
-void Keeper::SaveState()
-{
+void Keeper::SaveState() {
     if (o_.statePath.empty() || !lobby_) return;
     std::ostringstream s;
     if (!lobby_->code.empty()) s << "lobby " << lobby_->code << "\n";

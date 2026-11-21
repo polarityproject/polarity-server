@@ -10,8 +10,9 @@ namespace {
 class Out {
 public:
     std::vector<uint8_t> b;
-    template <typename T> void Put(T v)
-    {
+
+    template <typename T>
+    void Put(T v) {
         const auto* p = reinterpret_cast<const uint8_t*>(&v);
         b.insert(b.end(), p, p + sizeof(T));
     }
@@ -20,10 +21,13 @@ public:
 class In {
 public:
     In(const uint8_t* p, size_t n) : p_(p), end_(p + n) {}
+
     bool ok = true;
+
     bool AtEnd() const { return p_ >= end_; }
-    template <typename T> T Get()
-    {
+
+    template <typename T>
+    T Get() {
         T v{};
         if (size_t(end_ - p_) < sizeof(T)) {
             ok = false;
@@ -39,8 +43,7 @@ private:
     const uint8_t* end_;
 };
 
-void PutPlayer(Out& o, const PlayerSetup& p)
-{
+void PutPlayer(Out& o, const PlayerSetup& p) {
     o.Put(p.character);
     o.Put(p.costume);
     o.Put(p.color);
@@ -51,8 +54,7 @@ void PutPlayer(Out& o, const PlayerSetup& p)
     o.Put(p.version);
 }
 
-PlayerSetup GetPlayer(In& in)
-{
+PlayerSetup GetPlayer(In& in) {
     PlayerSetup p;
     p.character = in.Get<uint32_t>();
     p.costume = in.Get<uint16_t>();
@@ -65,8 +67,7 @@ PlayerSetup GetPlayer(In& in)
     return p;
 }
 
-void PutSetup(Out& o, const MatchSetup& s)
-{
+void PutSetup(Out& o, const MatchSetup& s) {
     for (const auto& p : s.players) PutPlayer(o, p);
     o.Put(s.stage);
     o.Put(s.stageVariant);
@@ -77,8 +78,7 @@ void PutSetup(Out& o, const MatchSetup& s)
     for (int i = 0; i < kNumPlayers; i++) o.Put(s.streaks[i]);
 }
 
-MatchSetup GetSetup(In& in)
-{
+MatchSetup GetSetup(In& in) {
     MatchSetup s;
     for (auto& p : s.players) p = GetPlayer(in);
     s.stage = in.Get<uint16_t>();
@@ -91,8 +91,7 @@ MatchSetup GetSetup(In& in)
     return s;
 }
 
-void PutName(Out& o, const std::string& name, size_t max = kMaxName)
-{
+void PutName(Out& o, const std::string& name, size_t max = kMaxName) {
     // Cut between characters, not inside a UTF-8 sequence.
     size_t n = std::min(name.size(), max);
     while (n > 0 && n < name.size() && (static_cast<unsigned char>(name[n]) & 0xC0) == 0x80) n--;
@@ -100,8 +99,7 @@ void PutName(Out& o, const std::string& name, size_t max = kMaxName)
     o.b.insert(o.b.end(), name.begin(), name.begin() + n);
 }
 
-std::string GetName(In& in, size_t max = kMaxName)
-{
+std::string GetName(In& in, size_t max = kMaxName) {
     const uint8_t n = in.Get<uint8_t>();
     if (n > max) in.ok = false;
     std::string s;
@@ -109,8 +107,7 @@ std::string GetName(In& in, size_t max = kMaxName)
     return s;
 }
 
-void PutSeat(Out& o, const Seat& s, bool withName)
-{
+void PutSeat(Out& o, const Seat& s, bool withName) {
     if (withName) PutName(o, s.name);
     o.Put(static_cast<uint8_t>(int(s.present) | int(s.hasPick) << 1 | int(s.ready) << 2 | int(s.preloaded) << 3));
     PutPlayer(o, s.pick);
@@ -124,8 +121,7 @@ void PutSeat(Out& o, const Seat& s, bool withName)
     o.Put(s.hover);
 }
 
-Seat GetSeat(In& in, bool withName)
-{
+Seat GetSeat(In& in, bool withName) {
     Seat s;
     if (withName) s.name = GetName(in);
     const uint8_t flags = in.Get<uint8_t>();
@@ -145,15 +141,13 @@ Seat GetSeat(In& in, bool withName)
     return s;
 }
 
-void PutClock(Out& o, const Message& m)
-{
+void PutClock(Out& o, const Message& m) {
     o.Put(m.time);
     o.Put(m.echo);
     o.Put(m.echoAge);
 }
 
-void GetClock(In& in, Message& m)
-{
+void GetClock(In& in, Message& m) {
     m.time = in.Get<uint32_t>();
     m.echo = in.Get<uint32_t>();
     m.echoAge = in.Get<uint16_t>();
@@ -161,96 +155,93 @@ void GetClock(In& in, Message& m)
 
 } // namespace
 
-std::vector<uint8_t> Encode(const Message& m)
-{
+std::vector<uint8_t> Encode(const Message& m) {
     Out o;
     o.Put(kMagic);
     o.Put(m.protocol);
     o.Put(static_cast<uint8_t>(m.type));
     switch (m.type) {
-    case Type::Hello:
-        o.Put(m.nonce);
-        o.Put(m.build);
-        o.Put(static_cast<uint8_t>(m.role));
-        PutName(o, m.name);
-        o.Put(static_cast<uint8_t>(m.reports));
-        o.Put(m.seatToken);
-        break;
-    case Type::Accept:
-        o.Put(static_cast<uint8_t>(m.role));
-        PutName(o, m.name);
-        o.Put(static_cast<uint8_t>(m.reports));
-        break;
-    case Type::PlayerState:
-        PutClock(o, m);
-        PutSeat(o, m.seat, false);
-        break;
-    case Type::SessionState:
-        PutClock(o, m);
-        for (const Seat& seat : m.seats) PutSeat(o, seat, true);
-        o.Put(static_cast<uint8_t>(m.phase));
-        o.Put(m.played);
-        o.Put(m.spectators);
-        o.Put(m.stage);
-        o.Put(static_cast<uint8_t>(m.stageLocked));
-        o.Put(m.matchId);
-        break;
-    case Type::Inputs:
-        o.Put(m.matchId);
-        o.Put(m.first);
-        o.Put(static_cast<uint16_t>(m.frames.size()));
-        for (const FrameRecord& f : m.frames) {
-            for (PackedInput p : f.inputs.p) o.Put(p);
-            o.Put(f.checksum);
+        case Type::Hello:
+            o.Put(m.nonce);
+            o.Put(m.build);
+            o.Put(static_cast<uint8_t>(m.role));
+            PutName(o, m.name);
+            o.Put(static_cast<uint8_t>(m.reports));
+            o.Put(m.seatToken);
+            break;
+        case Type::Accept:
+            o.Put(static_cast<uint8_t>(m.role));
+            PutName(o, m.name);
+            o.Put(static_cast<uint8_t>(m.reports));
+            break;
+        case Type::PlayerState:
+            PutClock(o, m);
+            PutSeat(o, m.seat, false);
+            break;
+        case Type::SessionState:
+            PutClock(o, m);
+            for (const Seat& seat : m.seats) PutSeat(o, seat, true);
+            o.Put(static_cast<uint8_t>(m.phase));
+            o.Put(m.played);
+            o.Put(m.spectators);
+            o.Put(m.stage);
+            o.Put(static_cast<uint8_t>(m.stageLocked));
+            o.Put(m.matchId);
+            break;
+        case Type::Inputs:
+            o.Put(m.matchId);
+            o.Put(m.first);
+            o.Put(static_cast<uint16_t>(m.frames.size()));
+            for (const FrameRecord& f : m.frames) {
+                for (PackedInput p : f.inputs.p) o.Put(p);
+                o.Put(f.checksum);
+            }
+            break;
+        case Type::InputsAck:
+            o.Put(m.matchId);
+            o.Put(m.first);
+            o.Put(m.playedTo);
+            o.Put(static_cast<uint8_t>(m.decided));
+            break;
+        case Type::Matches: {
+            const size_t n = std::min(m.matches.size(), kMatchesPerMessage);
+            o.Put(static_cast<uint8_t>(n));
+            for (size_t i = 0; i < n; i++) {
+                const MatchEntry& e = m.matches[i];
+                o.Put(e.id);
+                PutSetup(o, e.setup);
+                o.Put(e.frames);
+                o.Put(static_cast<uint8_t>(e.finished));
+                o.Put(e.winner);
+            }
+            // After the entries: builds before M5 stop reading there.
+            o.Put(m.sliceAt);
+            o.Put(m.sliceOf ? m.sliceOf : static_cast<uint8_t>(n));
+            break;
         }
-        break;
-    case Type::InputsAck:
-        o.Put(m.matchId);
-        o.Put(m.first);
-        o.Put(m.playedTo);
-        o.Put(static_cast<uint8_t>(m.decided));
-        break;
-    case Type::Matches:
-    {
-        const size_t n = std::min(m.matches.size(), kMatchesPerMessage);
-        o.Put(static_cast<uint8_t>(n));
-        for (size_t i = 0; i < n; i++) {
-            const MatchEntry& e = m.matches[i];
-            o.Put(e.id);
-            PutSetup(o, e.setup);
-            o.Put(e.frames);
-            o.Put(static_cast<uint8_t>(e.finished));
-            o.Put(e.winner);
-        }
-        // After the entries: builds before M5 stop reading there.
-        o.Put(m.sliceAt);
-        o.Put(m.sliceOf ? m.sliceOf : static_cast<uint8_t>(n));
-        break;
-    }
-    case Type::Welcome:
-        o.Put(m.matchId);
-        PutSetup(o, m.setup);
-        o.Put(m.inputDelay);
-        o.Put(m.predictionWindow);
-        break;
-    case Type::Reject:
-        o.Put(static_cast<uint8_t>(m.reason));
-        break;
-    case Type::Loaded:
-        o.Put(m.matchId);
-        PutSetup(o, m.setup);
-        o.Put(m.stateChecksum);
-        break;
-    case Type::Bye:
-        PutName(o, m.text, kMaxText);
-        o.Put(static_cast<uint8_t>(m.forfeit));
-        break;
+        case Type::Welcome:
+            o.Put(m.matchId);
+            PutSetup(o, m.setup);
+            o.Put(m.inputDelay);
+            o.Put(m.predictionWindow);
+            break;
+        case Type::Reject:
+            o.Put(static_cast<uint8_t>(m.reason));
+            break;
+        case Type::Loaded:
+            o.Put(m.matchId);
+            PutSetup(o, m.setup);
+            o.Put(m.stateChecksum);
+            break;
+        case Type::Bye:
+            PutName(o, m.text, kMaxText);
+            o.Put(static_cast<uint8_t>(m.forfeit));
+            break;
     }
     return std::move(o.b);
 }
 
-std::optional<Message> Decode(const uint8_t* data, size_t len)
-{
+std::optional<Message> Decode(const uint8_t* data, size_t len) {
     In in(data, len);
     if (in.Get<uint32_t>() != kMagic) return std::nullopt;
     Message m;
@@ -262,96 +253,95 @@ std::optional<Message> Decode(const uint8_t* data, size_t len)
         return m;
     }
     switch (m.type) {
-    case Type::Hello:
-        m.nonce = in.Get<uint16_t>();
-        m.build = in.Get<uint64_t>();
-        m.role = static_cast<Role>(in.Get<uint8_t>());
-        m.name = GetName(in);
-        m.reports = in.Get<uint8_t>() != 0;
-        m.seatToken = in.Get<uint64_t>();
-        break;
-    case Type::Accept:
-        m.role = static_cast<Role>(in.Get<uint8_t>());
-        m.name = GetName(in);
-        m.reports = in.Get<uint8_t>() != 0;
-        break;
-    case Type::PlayerState:
-        GetClock(in, m);
-        m.seat = GetSeat(in, false);
-        break;
-    case Type::SessionState:
-        GetClock(in, m);
-        for (Seat& seat : m.seats) seat = GetSeat(in, true);
-        m.phase = static_cast<SessionPhase>(in.Get<uint8_t>());
-        m.played = in.Get<uint16_t>();
-        m.spectators = in.Get<uint8_t>();
-        m.stage = in.Get<uint16_t>();
-        m.stageLocked = in.Get<uint8_t>() != 0;
-        m.matchId = in.Get<uint64_t>();
-        break;
-    case Type::Inputs: {
-        m.matchId = in.Get<uint64_t>();
-        m.first = in.Get<uint32_t>();
-        const uint16_t n = in.Get<uint16_t>();
-        if (n > kInputsPerMessage) return std::nullopt;
-        for (uint16_t i = 0; i < n && in.ok; i++) {
-            FrameRecord& f = m.frames.emplace_back();
-            for (PackedInput& p : f.inputs.p) p = in.Get<PackedInput>();
-            f.checksum = in.Get<uint32_t>();
+        case Type::Hello:
+            m.nonce = in.Get<uint16_t>();
+            m.build = in.Get<uint64_t>();
+            m.role = static_cast<Role>(in.Get<uint8_t>());
+            m.name = GetName(in);
+            m.reports = in.Get<uint8_t>() != 0;
+            m.seatToken = in.Get<uint64_t>();
+            break;
+        case Type::Accept:
+            m.role = static_cast<Role>(in.Get<uint8_t>());
+            m.name = GetName(in);
+            m.reports = in.Get<uint8_t>() != 0;
+            break;
+        case Type::PlayerState:
+            GetClock(in, m);
+            m.seat = GetSeat(in, false);
+            break;
+        case Type::SessionState:
+            GetClock(in, m);
+            for (Seat& seat : m.seats) seat = GetSeat(in, true);
+            m.phase = static_cast<SessionPhase>(in.Get<uint8_t>());
+            m.played = in.Get<uint16_t>();
+            m.spectators = in.Get<uint8_t>();
+            m.stage = in.Get<uint16_t>();
+            m.stageLocked = in.Get<uint8_t>() != 0;
+            m.matchId = in.Get<uint64_t>();
+            break;
+        case Type::Inputs: {
+            m.matchId = in.Get<uint64_t>();
+            m.first = in.Get<uint32_t>();
+            const uint16_t n = in.Get<uint16_t>();
+            if (n > kInputsPerMessage) return std::nullopt;
+            for (uint16_t i = 0; i < n && in.ok; i++) {
+                FrameRecord& f = m.frames.emplace_back();
+                for (PackedInput& p : f.inputs.p) p = in.Get<PackedInput>();
+                f.checksum = in.Get<uint32_t>();
+            }
+            break;
         }
-        break;
-    }
-    case Type::InputsAck:
-        m.matchId = in.Get<uint64_t>();
-        m.first = in.Get<uint32_t>();
-        if (!in.AtEnd()) {
-            m.playedTo = in.Get<uint32_t>();
-            m.decided = in.Get<uint8_t>() != 0;
+        case Type::InputsAck:
+            m.matchId = in.Get<uint64_t>();
+            m.first = in.Get<uint32_t>();
+            if (!in.AtEnd()) {
+                m.playedTo = in.Get<uint32_t>();
+                m.decided = in.Get<uint8_t>() != 0;
+            }
+            break;
+        case Type::Matches: {
+            const uint8_t n = in.Get<uint8_t>();
+            if (n > kKeptMatches) return std::nullopt;
+            for (uint8_t i = 0; i < n && in.ok; i++) {
+                MatchEntry& e = m.matches.emplace_back();
+                e.id = in.Get<uint64_t>();
+                e.setup = GetSetup(in);
+                e.frames = in.Get<uint32_t>();
+                e.finished = in.Get<uint8_t>() != 0;
+                e.winner = in.Get<int8_t>();
+            }
+            if (!in.ok) break;
+            if (in.AtEnd()) {
+                m.sliceAt = 0;
+                m.sliceOf = n;
+            } else {
+                m.sliceAt = in.Get<uint8_t>();
+                m.sliceOf = in.Get<uint8_t>();
+                if (m.sliceOf > kKeptMatches || m.sliceAt + n > m.sliceOf) return std::nullopt;
+            }
+            break;
         }
-        break;
-    case Type::Matches: {
-        const uint8_t n = in.Get<uint8_t>();
-        if (n > kKeptMatches) return std::nullopt;
-        for (uint8_t i = 0; i < n && in.ok; i++) {
-            MatchEntry& e = m.matches.emplace_back();
-            e.id = in.Get<uint64_t>();
-            e.setup = GetSetup(in);
-            e.frames = in.Get<uint32_t>();
-            e.finished = in.Get<uint8_t>() != 0;
-            e.winner = in.Get<int8_t>();
-        }
-        if (!in.ok) break;
-        if (in.AtEnd()) {
-            m.sliceAt = 0;
-            m.sliceOf = n;
-        }
-        else {
-            m.sliceAt = in.Get<uint8_t>();
-            m.sliceOf = in.Get<uint8_t>();
-            if (m.sliceOf > kKeptMatches || m.sliceAt + n > m.sliceOf) return std::nullopt;
-        }
-        break;
-    }
-    case Type::Welcome:
-        m.matchId = in.Get<uint64_t>();
-        m.setup = GetSetup(in);
-        m.inputDelay = in.Get<uint8_t>();
-        m.predictionWindow = in.Get<uint8_t>();
-        break;
-    case Type::Reject:
-        m.reason = static_cast<RejectReason>(in.Get<uint8_t>());
-        break;
-    case Type::Loaded:
-        m.matchId = in.Get<uint64_t>();
-        m.setup = GetSetup(in);
-        m.stateChecksum = in.Get<uint32_t>();
-        break;
-    case Type::Bye:
-        m.text = GetName(in, kMaxText);
-        m.forfeit = in.Get<uint8_t>() != 0;
-        break;
-    default:
-        return std::nullopt;
+        case Type::Welcome:
+            m.matchId = in.Get<uint64_t>();
+            m.setup = GetSetup(in);
+            m.inputDelay = in.Get<uint8_t>();
+            m.predictionWindow = in.Get<uint8_t>();
+            break;
+        case Type::Reject:
+            m.reason = static_cast<RejectReason>(in.Get<uint8_t>());
+            break;
+        case Type::Loaded:
+            m.matchId = in.Get<uint64_t>();
+            m.setup = GetSetup(in);
+            m.stateChecksum = in.Get<uint32_t>();
+            break;
+        case Type::Bye:
+            m.text = GetName(in, kMaxText);
+            m.forfeit = in.Get<uint8_t>() != 0;
+            break;
+        default:
+            return std::nullopt;
     }
     if (!in.ok) return std::nullopt;
     return m;

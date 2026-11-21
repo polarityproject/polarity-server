@@ -26,16 +26,14 @@ namespace sfv::keeper {
 template <typename Client>
 class Connector {
 public:
-    using Make = std::function<Client*()>;       // a connected client, or null (on a worker)
+    using Make = std::function<Client*()>;        // a connected client, or null (on a worker)
     using Destroy = std::function<void(Client*)>; // leaves and frees one (on a worker)
 
-    Connector(Make make, Destroy destroy, int threads = 4) : make_(std::move(make)), destroy_(std::move(destroy))
-    {
+    Connector(Make make, Destroy destroy, int threads = 4) : make_(std::move(make)), destroy_(std::move(destroy)) {
         for (int i = 0; i < threads; i++) threads_.emplace_back([this] { Work(); });
     }
 
-    ~Connector()
-    {
+    ~Connector() {
         {
             std::lock_guard lock(m_);
             stop_ = true;
@@ -56,8 +54,7 @@ public:
     Connector& operator=(const Connector&) = delete;
 
     // Starts a connect: its ticket (never 0).
-    uint64_t Request()
-    {
+    uint64_t Request() {
         uint64_t ticket;
         {
             std::lock_guard lock(m_);
@@ -71,8 +68,7 @@ public:
 
     // True once the connect is over: *client is the connected client (the
     // caller's from now on) or null if it failed; *seconds what it took.
-    bool Take(uint64_t ticket, Client** client, double* seconds = nullptr)
-    {
+    bool Take(uint64_t ticket, Client** client, double* seconds = nullptr) {
         std::lock_guard lock(m_);
         const auto it = done_.find(ticket);
         if (it == done_.end()) return false;
@@ -85,8 +81,7 @@ public:
 
     // Not wanted any more: not started, it never starts; started or done,
     // its client is destroyed by a worker.
-    void Cancel(uint64_t ticket)
-    {
+    void Cancel(uint64_t ticket) {
         if (!ticket) return;
         Client* finished = nullptr;
         {
@@ -103,8 +98,7 @@ public:
                 finished = done->second.client;
                 done_.erase(done);
                 pending_--;
-            }
-            else {
+            } else {
                 cancelled_.insert(ticket);
                 pending_--;
             }
@@ -113,8 +107,7 @@ public:
     }
 
     // The loop is done with it: a worker leaves its room and destroys it.
-    void Retire(Client* client)
-    {
+    void Retire(Client* client) {
         if (!client) return;
         {
             std::lock_guard lock(m_);
@@ -124,8 +117,7 @@ public:
     }
 
     // Connects asked for and not yet taken or cancelled.
-    size_t Pending() const
-    {
+    size_t Pending() const {
         std::lock_guard lock(m_);
         return pending_;
     }
@@ -135,13 +127,13 @@ private:
         uint64_t ticket = 0;
         Client* retire = nullptr; // a teardown, not a connect
     };
+
     struct Done {
         Client* client = nullptr;
         double seconds = 0;
     };
 
-    void Work()
-    {
+    void Work() {
         while (true) {
             Job job;
             {

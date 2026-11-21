@@ -55,10 +55,13 @@ public:
     // The host: its member id and its build (the match room's `build`, which
     // viewers must have too). Hello goes out from the next Step.
     void SetHost(uint64_t id, uint64_t build);
+
     // The build viewers must have, before the host is known (its code report).
     void SetBuild(uint64_t build) { build_ = build; }
+
     // The same two play on (keeper again): the next set's target.
     void SetFirstTo(int firstTo) { config_.firstTo = firstTo; }
+
     void FromHost(const lobby::Message& m, int64_t nowMs);
     // The host left the match room (or its link is gone).
     void HostGone(int64_t nowMs);
@@ -83,12 +86,13 @@ private:
         bool hasWelcome = false;
         lobby::Message welcome;
         bool hasLoaded = false;
-        lobby::Message loaded; // the host's: its setup and checksum
-        std::vector<lobby::FrameRecord> frames;  // [0, frames.size()) in hand
+        lobby::Message loaded;                        // the host's: its setup and checksum
+        std::vector<lobby::FrameRecord> frames;       // [0, frames.size()) in hand
         std::map<uint32_t, lobby::FrameRecord> ahead; // beyond, arrived out of order
-        bool listed = false; // in the host's match list
-        lobby::MatchEntry entry; // as the host's list last said
+        bool listed = false;                          // in the host's match list
+        lobby::MatchEntry entry;                      // as the host's list last said
     };
+
     struct Viewer {
         std::string name;
         int64_t acceptedMs = 0;
@@ -103,8 +107,8 @@ private:
         int64_t progressMs = 0;
         uint64_t ackMatch = 0;
         uint32_t ackFirst = 0;
-        uint32_t played = 0;  // its playback (InputsAck.played)
-        bool decided = false; // its battle has reached the result
+        uint32_t played = 0;   // its playback (InputsAck.played)
+        bool decided = false;  // its battle has reached the result
         bool inSelect = false; // shown the players' select screen (until they leave it)
         int byes = 0;
         int64_t byeMs = 0;
@@ -143,8 +147,8 @@ private:
     bool byeForfeit_ = false;
     bool haveState_ = false;
     lobby::Message state_; // the host's last SessionState
-    uint64_t live_ = 0;     // the newest match the host announced
-    uint64_t upMatch_ = 0;  // the game being taken from the host
+    uint64_t live_ = 0;    // the newest match the host announced
+    uint64_t upMatch_ = 0; // the game being taken from the host
     bool upStreaming_ = false;
     int64_t upLoadedMs_ = -1000000;
     int64_t upAckMs_ = 0;

@@ -33,9 +33,9 @@ namespace sfv::keeper {
 struct KeeperOptions {
     std::string host = "127.0.0.1";
     uint16_t port = 5555;
-    std::string statePath;   // the room codes, to reclaim after a restart; empty: none kept
+    std::string statePath; // the room codes, to reclaim after a restart; empty: none kept
     KeyPair key;
-    uint16_t protocol = 0;   // the lobby protocol the channel is for
+    uint16_t protocol = 0; // the lobby protocol the channel is for
     std::string name = "Polarity";
     int maxRooms = 500;
     // The local UDP ports of its P2P links (--ports 47200-47299): the server's
@@ -88,15 +88,16 @@ private:
         std::string name;
         int64_t joinedMs = 0;
         ChatLimiter chat;
-        uint32_t lastSeq = 0;      // highest request handled
+        uint32_t lastSeq = 0; // highest request handled
         int64_t lastRoomAskMs = -1;
         int64_t lastPeekMs = -1;
-        int callStrikes = 0; // your-turn calls let lapse in a row (twice: off the queue)
+        int callStrikes = 0;  // your-turn calls let lapse in a row (twice: off the queue)
         bool removed = false; // kicked: what they sent before going is not acted on
-        std::string chara;         // member data `ch`, for the list's faces
-        std::string country;       // member data `@cc`, set by the rooms server from the address: for the rooms API
-        std::string version;       // member data `ver`: their Polarity version
+        std::string chara;    // member data `ch`, for the list's faces
+        std::string country;  // member data `@cc`, set by the rooms server from the address: for the rooms API
+        std::string version;  // member data `ver`: their Polarity version
     };
+
     struct Outgoing {
         uint32_t to = 0;
         uint32_t seq = 0;
@@ -105,7 +106,9 @@ private:
         int64_t untilMs = 0;
         int sends = 0;
     };
-    enum class Kind { Lobby, Custom };
+    enum class Kind { Lobby,
+                      Custom };
+
     // A table set's spectator relay (core/spectate_relay.h): the host of a
     // room of its own (`down`) where every viewer of the set watches, and,
     // from its first viewer on, a member of the set's match room (`up`, the
@@ -123,42 +126,44 @@ private:
         uint32_t hostId = 0;
         bool hostSet = false;
         std::vector<std::pair<std::string, std::string>> data; // the match room's build keys, for the relay room
-        bool published = false; // the relay room is the table's `watch`
+        bool published = false;                                // the relay room is the table's `watch`
         std::unique_ptr<SpectateRelay> core;
         int64_t startedMs = 0;
         int64_t upStartedMs = -1; // joined the match room (on the first viewer); -1 not yet
         int64_t statsMs = 0;
         bool ended = false;
     };
+
     // A table of a custom room (keeper_protocol.h TableState): its state and
     // queue are written to room data; the rest is the keeper's own.
     struct Table {
         TableState s;
         std::vector<uint32_t> queue;
-        Rules rules;          // t<n>: the next set's
-        Rules setRules;       // the running set's (fixed when it was called)
-        uint64_t token = 0;   // the running set's P2 seat token
-        std::string build;    // P1's build (its code report), for the relay room
+        Rules rules;           // t<n>: the next set's
+        Rules setRules;        // the running set's (fixed when it was called)
+        uint64_t token = 0;    // the running set's P2 seat token
+        std::string build;     // P1's build (its code report), for the relay room
         int64_t phaseAtMs = 0; // when the phase began (its time limit)
-        std::string written;  // s<n> and q<n> as last written
+        std::string written;   // s<n> and q<n> as last written
     };
+
     struct Room {
         Kind kind = Kind::Custom;
         WeyveClient* client = nullptr;
         uint64_t connecting = 0; // a connect asked for (Connector ticket); the room waits for it
         int64_t connectAskedMs = 0;
-        std::string code;      // known once in the room (or kept from before a restart)
+        std::string code; // known once in the room (or kept from before a restart)
         bool inRoom = false;
         bool host = false;
-        bool setUp = false;    // host and its data written
+        bool setUp = false; // host and its data written
         bool joinAsked = false;
         bool lobbyListAsked = false; // the lobby: looking for one of its build to adopt (FindLobby)
         std::vector<uint32_t> order; // members by join time, oldest first
         std::map<uint32_t, Member> members;
         std::deque<Outgoing> outbox;
         std::map<std::string, std::string> written; // room data as we last wrote it
-        Listing listed;          // its listing slots as we last set them (the desk's, a public room's)
-        bool listedOn = false;   // a custom room: in the server's listing
+        Listing listed;                             // its listing slots as we last set them (the desk's, a public room's)
+        bool listedOn = false;                      // a custom room: in the server's listing
         int64_t createdMs = 0;
         int64_t reconnectMs = 0;
         // Custom rooms.
@@ -166,12 +171,12 @@ private:
         std::string version; // its maker's Polarity version (room data `ver`): its players' too
         uint32_t owner = 0;
         bool ownerArrived = false;
-        uint32_t requester = 0;  // the lobby member who asked (answered once the code is known)
+        uint32_t requester = 0; // the lobby member who asked (answered once the code is known)
         uint32_t requestSeq = 0;
-        bool reclaimed = false;  // rejoined after a restart: settings come from its room data
+        bool reclaimed = false; // rejoined after a restart: settings come from its room data
         int64_t emptySinceMs = -1;
         bool closing = false;
-        std::vector<uint32_t> masked; // members whose names the filter rejected (public rooms)
+        std::vector<uint32_t> masked;        // members whose names the filter rejected (public rooms)
         std::map<uint32_t, int> maskNumbers; // their "Player 1234" numbers (1000-9999, unique in the room)
         std::vector<Table> tables;
         bool unlisted = false; // the operator took it off the public list
@@ -239,14 +244,15 @@ private:
     std::mt19937_64 rng_{std::random_device{}()};
     // The rooms the lobby lists (public, set up, someone in them, not unlisted).
     std::vector<ListedRoom> PublicList() const;
+
     // Counters since the start, for MetricsText.
     struct Stats {
         static constexpr int kBuckets = 10;
         static constexpr double kBucketSeconds[kBuckets] = {0.001, 0.002, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0};
         uint64_t steps = 0;
         double stepSeconds = 0;
-        uint64_t stepBuckets[kBuckets] = {}; // steps at or under each limit (not cumulative)
-        double stepMaxSeconds = 0;           // since the last MetricsText
+        uint64_t stepBuckets[kBuckets] = {};      // steps at or under each limit (not cumulative)
+        double stepMaxSeconds = 0;                // since the last MetricsText
         std::map<std::string, uint64_t> requests; // by kind (known kinds; the rest "other")
         uint64_t answers = 0, resends = 0, notices = 0, tickets = 0, calls = 0, callsLapsed = 0;
         std::map<std::string, uint64_t> sets; // how sets ended: result, forfeit, again, unfinished
@@ -254,16 +260,21 @@ private:
         uint64_t connects = 0, connectFailures = 0;
         double connectSeconds = 0, connectMaxSeconds = 0; // the max since the last MetricsText
     } stats_;
+
     void SaveState();
     std::vector<std::string> LoadState();
+
     int Count(const Room& room) const { return static_cast<int>(room.members.size()); }
+
     // The rooms server's --stats file: its connection count, and how old the
     // file is (-1: no file, or none asked for).
     struct ServerStats {
         long connections = -1;
         double ageSeconds = -1;
+
         bool Fresh() const { return connections >= 0 && ageSeconds >= 0 && ageSeconds <= 30; }
     };
+
     ServerStats ReadServerStats() const;
     // Players online from the server's connection count; -1 without a fresh one.
     int OnlineFromServer(const ServerStats& stats) const;

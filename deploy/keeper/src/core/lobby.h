@@ -40,13 +40,13 @@
 namespace sfv::lobby {
 
 constexpr uint32_t kMagic = 0x4E564653; // "SFVN"
-constexpr uint16_t kProtocol = 17; // 7: names up to 96 bytes of UTF-8; 8: the match list for spectators; 9: the stage lock;
-                                   // 11: whether each side sends desync reports; 13: each player's character version;
-                                   // 14: the rooms branch (0.3.0-rooms.N), so its builds and 0.2.x refuse each other
-                                   // (12 was its number before main took 13; a main bump past 13 takes 15): the seat
-                                   // token in Hello; 16: the rooms branch's room titles (SFV's lounge comments, the
-                                   // keeper's room request and public list; 15 stays main's next); 17: no frozen-state
-                                   // copy (types 6-8 and Loaded's reconciled flag gone)
+constexpr uint16_t kProtocol = 17;      // 7: names up to 96 bytes of UTF-8; 8: the match list for spectators; 9: the stage lock;
+                                        // 11: whether each side sends desync reports; 13: each player's character version;
+                                        // 14: the rooms branch (0.3.0-rooms.N), so its builds and 0.2.x refuse each other
+                                        // (12 was its number before main took 13; a main bump past 13 takes 15): the seat
+                                        // token in Hello; 16: the rooms branch's room titles (SFV's lounge comments, the
+                                        // keeper's room request and public list; 15 stays main's next); 17: no frozen-state
+                                        // copy (types 6-8 and Loaded's reconciled flag gone)
 // Message size limits: under Weyvelength's 1024-byte datagrams.
 constexpr size_t kInputsPerMessage = 60;
 // The session's matches a host keeps for spectators (streams and starting
@@ -58,7 +58,7 @@ constexpr size_t kKeptMatches = 40;
 constexpr size_t kMatchesPerMessage = 12; // also what builds before M5 accept in one
 // Bytes of UTF-8: a 32-character Steam name in Japanese takes up to 96.
 constexpr size_t kMaxName = 96;
-constexpr size_t kMaxText = 200; // a Bye's reason
+constexpr size_t kMaxText = 200;          // a Bye's reason
 constexpr uint16_t kAnyStage = 0xFFFF;    // whatever the game has prepared
 constexpr uint16_t kRandomStage = 0xFFFE; // a random stage per match
 
@@ -83,17 +83,24 @@ enum class RejectReason : uint8_t {
     NoSpectators = 5,
     ViaKeeper = 6, // a table set: viewers watch in the keeper's relay room, not here
 };
-enum class Role : uint8_t { Player = 0, Spectator = 1 };
+enum class Role : uint8_t { Player = 0,
+                            Spectator = 1 };
 // A player's answer to the post-match menu.
-enum class Choice : uint8_t { None = 0, Rematch = 1, CharacterSelect = 2 };
-enum class SessionPhase : uint8_t { Lobby = 0, Match = 1, PostMatch = 2 };
+enum class Choice : uint8_t { None = 0,
+                              Rematch = 1,
+                              CharacterSelect = 2 };
+enum class SessionPhase : uint8_t { Lobby = 0,
+                                    Match = 1,
+                                    PostMatch = 2 };
 // How a player's machine is connected (its default route's adapter).
-enum class Link : uint8_t { Unknown = 0, Wired = 1, WiFi = 2 };
+enum class Link : uint8_t { Unknown = 0,
+                            Wired = 1,
+                            WiFi = 2 };
 
 // One player as the session sees it.
 struct Seat {
     std::string name;
-    bool present = false;   // the seat is taken
+    bool present = false; // the seat is taken
     bool hasPick = false;
     PlayerSetup pick;
     bool ready = false;
@@ -151,7 +158,7 @@ struct Message {
     // SessionState
     Seat seats[kNumPlayers];
     SessionPhase phase = SessionPhase::Lobby;
-    uint16_t played = 0;  // matches finished this set (a table's next set starts over), else session
+    uint16_t played = 0; // matches finished this set (a table's next set starts over), else session
     uint8_t spectators = 0;
     uint16_t stage = kAnyStage; // the host's stage rule: a stage table index, kRandomStage or kAnyStage
     bool stageLocked = false;   // the host confirmed the stage: on to character select
