@@ -88,9 +88,7 @@ class Store:
             return
         # Counted again first: collect-reports.py deletes folders behind our
         # back, and its ".collecting-*" folder (being packed) is not ours.
-        self.total = sum(
-            self._size(os.path.join(self.root, d)) for d in os.listdir(self.root) if not d.startswith(".")
-        )
+        self.total = sum(self._size(os.path.join(self.root, d)) for d in os.listdir(self.root) if not d.startswith("."))
         folders = sorted(
             (os.path.getmtime(os.path.join(self.root, d)), d)
             for d in os.listdir(self.root)
@@ -161,7 +159,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 break
         else:
             return self.answer(404, "not found")
-        name = self.path[len(prefix):]
+        name = self.path[len(prefix) :]
         m = pattern.match(name)
         if not m:
             return self.answer(400, "not a report name")

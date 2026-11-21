@@ -84,7 +84,9 @@ def give_to_caller(path):
 
 
 def main():
-    p = argparse.ArgumentParser(description="Pack polarity-reports' desync (and crash) reports into a zip and delete them.")
+    p = argparse.ArgumentParser(
+        description="Pack polarity-reports' desync (and crash) reports into a zip and delete them."
+    )
     p.add_argument("--reports-dir", default=os.path.join(STATE, "reports"))
     p.add_argument("--crashes-dir", default=os.path.join(STATE, "crashes"))
     p.add_argument("--crashes", action="store_true", help="the crash reports too")

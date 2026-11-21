@@ -84,11 +84,16 @@ def read_status(path):
 
 
 def push(url, secret, body):
-    req = urllib.request.Request(url, data=body, method="POST", headers={
-        "Content-Type": "application/json",
-        "Authorization": "Bearer " + secret,
-        "User-Agent": "polarity-rooms-publisher/1",
-    })
+    req = urllib.request.Request(
+        url,
+        data=body,
+        method="POST",
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + secret,
+            "User-Agent": "polarity-rooms-publisher/1",
+        },
+    )
     with urllib.request.urlopen(req, timeout=10) as r:
         return r.status
 

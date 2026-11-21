@@ -58,6 +58,7 @@ def esc(v):
 
 def collect():
     lines = []
+
     def metric(name, kind, help_text, rows):
         lines.append(f"# HELP {name} {help_text}\n# TYPE {name} {kind}")
         for labels, value in rows:
@@ -99,7 +100,12 @@ def collect():
         ok = 0
         print(time.strftime("%H:%M:%S ") + f"container-stats: {e}", flush=True)
     metric("sfvr_container_up", "gauge", "1 when the container is running.", up)
-    metric("sfvr_container_healthy", "gauge", "1 when the container's health check passes (only containers that have one).", healthy)
+    metric(
+        "sfvr_container_healthy",
+        "gauge",
+        "1 when the container's health check passes (only containers that have one).",
+        healthy,
+    )
     metric("sfvr_container_restarts", "gauge", "Times Docker restarted the container.", restarts)
     metric("sfvr_container_cpu_seconds_total", "counter", "CPU time the container used since it started.", cpu)
     metric("sfvr_container_memory_bytes", "gauge", "Memory in use, less inactive file cache (the working set).", mem)
