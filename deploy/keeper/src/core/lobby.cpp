@@ -240,31 +240,10 @@ std::vector<uint8_t> Encode(const Message& m)
         o.Put(m.matchId);
         PutSetup(o, m.setup);
         o.Put(m.stateChecksum);
-        o.Put(static_cast<uint8_t>(m.reconciled));
         break;
     case Type::Bye:
         PutName(o, m.text, kMaxText);
         o.Put(static_cast<uint8_t>(m.forfeit));
-        break;
-    case Type::StateHashes:
-        o.Put(m.matchId);
-        o.Put(m.first);
-        o.Put(m.total);
-        o.Put(static_cast<uint16_t>(m.hashes.size()));
-        for (uint64_t h : m.hashes) o.Put(h);
-        break;
-    case Type::StateRequest:
-        o.Put(m.matchId);
-        o.Put(static_cast<uint16_t>(m.regions.size()));
-        for (uint32_t r : m.regions) o.Put(r);
-        break;
-    case Type::StateData:
-        o.Put(m.matchId);
-        o.Put(m.region);
-        o.Put(m.total);
-        o.Put(m.offset);
-        o.Put(static_cast<uint16_t>(m.bytes.size()));
-        o.b.insert(o.b.end(), m.bytes.begin(), m.bytes.end());
         break;
     }
     return std::move(o.b);
@@ -366,38 +345,11 @@ std::optional<Message> Decode(const uint8_t* data, size_t len)
         m.matchId = in.Get<uint64_t>();
         m.setup = GetSetup(in);
         m.stateChecksum = in.Get<uint32_t>();
-        m.reconciled = in.Get<uint8_t>() != 0;
         break;
     case Type::Bye:
         m.text = GetName(in, kMaxText);
         m.forfeit = in.Get<uint8_t>() != 0;
         break;
-    case Type::StateHashes: {
-        m.matchId = in.Get<uint64_t>();
-        m.first = in.Get<uint32_t>();
-        m.total = in.Get<uint32_t>();
-        const uint16_t n = in.Get<uint16_t>();
-        if (n > kHashesPerMessage) return std::nullopt;
-        for (uint16_t i = 0; i < n && in.ok; i++) m.hashes.push_back(in.Get<uint64_t>());
-        break;
-    }
-    case Type::StateRequest: {
-        m.matchId = in.Get<uint64_t>();
-        const uint16_t n = in.Get<uint16_t>();
-        if (n > kRegionsPerRequest) return std::nullopt;
-        for (uint16_t i = 0; i < n && in.ok; i++) m.regions.push_back(in.Get<uint32_t>());
-        break;
-    }
-    case Type::StateData: {
-        m.matchId = in.Get<uint64_t>();
-        m.region = in.Get<uint32_t>();
-        m.total = in.Get<uint32_t>();
-        m.offset = in.Get<uint32_t>();
-        const uint16_t n = in.Get<uint16_t>();
-        if (n > kStateChunk) return std::nullopt;
-        for (uint16_t i = 0; i < n && in.ok; i++) m.bytes.push_back(in.Get<uint8_t>());
-        break;
-    }
     default:
         return std::nullopt;
     }

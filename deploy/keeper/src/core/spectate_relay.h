@@ -5,18 +5,15 @@
 // many watch (user, 2026-11-05).
 //
 // Toward the host the relay is a spectator that has no game: it says Hello,
-// and for each game it sends a Loaded whose checksum cannot match, so the
-// host sends that game's region hashes (4 KB, lobby.h's reconcile); it then
-// says it has reconciled and takes the input stream as fast as the host
-// sends it. It never takes a game's whole starting state (about 0.5 MB, a
-// cost to P1's upload) except for the regions a viewer lacks, on demand, and
-// once the set is decided, the games a viewer has not reached yet, so it can
-// serve them after the host has left.
+// and for each game it sends a Loaded, takes the host's back (the setup and
+// the starting state's checksum) and then the input stream as fast as the
+// host sends it. It never takes any game state: each viewer builds frame 0
+// itself and compares its checksum with the host's.
 //
 // Toward the viewers the relay is the host as they know it: Accept, the
 // host's SessionState (stamped for each viewer), Welcome, the host's Loaded,
-// the region hashes and bytes, the match list and the input streams with
-// the same window and resends as the host's. A viewer far behind plays every
+// the match list and the input streams with the same window and resends as
+// the host's. A viewer far behind plays every
 // game of the set: the relay keeps them after the host leaves, and says Bye
 // once the viewer has seen the last one.
 //
@@ -28,7 +25,6 @@
 #include <cstdint>
 #include <functional>
 #include <map>
-#include <set>
 #include <string>
 #include <vector>
 
@@ -45,7 +41,6 @@ struct RelayStats {
     size_t viewers = 0;
     size_t games = 0;
     uint64_t bytesFromHost = 0; // payload bytes of the host's messages
-    uint64_t stateBytesFromHost = 0;
     uint64_t bytesToViewers = 0;
     bool hostAccepted = false;
     bool hostLeft = false;
@@ -83,30 +78,16 @@ public:
     std::string ViewersLine() const;
 
 private:
-    struct Region {
-        uint32_t total = 0;
-        std::vector<uint8_t> bytes;
-        std::vector<bool> chunks;
-        bool complete = false;
-    };
     struct Game {
         uint64_t id = 0;
         bool hasWelcome = false;
         lobby::Message welcome;
         bool hasLoaded = false;
         lobby::Message loaded; // the host's: its setup and checksum
-        std::vector<uint64_t> hashes;
-        std::vector<bool> hashParts;
-        bool hashesComplete = false;
-        bool noHashes = false; // the host sent none: streamed without
         std::vector<lobby::FrameRecord> frames;  // [0, frames.size()) in hand
         std::map<uint32_t, lobby::FrameRecord> ahead; // beyond, arrived out of order
         bool listed = false; // in the host's match list
         lobby::MatchEntry entry; // as the host's list last said
-        std::map<uint32_t, Region> regions;
-        std::set<uint32_t> want; // regions to ask the host for
-        int64_t askedMs = -1000000;            // the last request for its regions
-        std::map<uint32_t, int64_t> askedAt;   // per region
     };
     struct Viewer {
         std::string name;
@@ -116,8 +97,6 @@ private:
         int64_t heardTimeAtMs = 0;
         uint64_t match = 0;
         bool loaded = false;
-        uint32_t checksum = 0;
-        bool reconciled = false;
         bool streaming = false;
         int wanted = 0;
         int sentThrough = -1;
@@ -141,11 +120,9 @@ private:
     int IndexOf(uint64_t id) const;
     void OnHostList(const lobby::Message& m);
     void AddFrames(Game& g, const lobby::Message& m);
-    void AddStateData(Game& g, const lobby::Message& m);
     void StepHost(int64_t nowMs);
     void StepViewers(int64_t nowMs);
     void Stream(int64_t nowMs);
-    void SendRegions(uint64_t to, const Game& g, const std::vector<uint32_t>& regions);
     void SendList(int64_t nowMs, uint64_t only = 0); // only: to that viewer alone
     bool ViewerDone(const Viewer& v) const;
     const Game* LastPlayed() const;
@@ -171,7 +148,6 @@ private:
     bool upStreaming_ = false;
     int64_t upLoadedMs_ = -1000000;
     int64_t upAckMs_ = 0;
-    int64_t upSinceMs_ = 0; // when upMatch_ became the game to take
     bool decided_ = false;
     std::vector<lobby::MatchEntry> hostSlices_;
 

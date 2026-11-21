@@ -16,7 +16,8 @@
 //   host -> all      Welcome       start a match: its id and setup
 //   all -> host      Loaded        battle created and frozen at frame 0, with
 //                                  the setup the game actually loaded and the
-//                                  checksum of the frozen state
+//                                  checksum of the frozen state (the match
+//                                  starts only when it equals the host's)
 //   host -> spec     Inputs        confirmed inputs of both players, with the
 //                                  host's checksum of each frame
 //   spec -> host     InputsAck     the next frame the spectator needs
@@ -26,15 +27,8 @@
 // are the heartbeat too, and carry timestamps for the round trip); Hello and
 // Loaded are repeated until answered: the transport may drop any of them.
 //
-// When the frozen states differ (memory the game has not initialised yet, so
-// it holds what each process had there before), the joiner (and every
-// spectator) takes the host's values before the match starts:
-//
-//   host -> joiner   StateHashes   per-region hashes of the frozen state
-//   joiner -> host   StateRequest  the host regions it has no equal of
-//   host -> joiner   StateData     their bytes, in chunks
-//
-// and its next Loaded says it is done (`reconciled`).
+// Each side builds frame 0 itself; no game state crosses the channel. Types
+// 6 to 8 were the frozen-state copy (protocols up to 16): unused, refused.
 
 #include "core/game.h"
 
@@ -46,19 +40,17 @@
 namespace sfv::lobby {
 
 constexpr uint32_t kMagic = 0x4E564653; // "SFVN"
-constexpr uint16_t kProtocol = 16; // 7: names up to 96 bytes of UTF-8; 8: the match list for spectators; 9: the stage lock;
+constexpr uint16_t kProtocol = 17; // 7: names up to 96 bytes of UTF-8; 8: the match list for spectators; 9: the stage lock;
                                    // 11: whether each side sends desync reports; 13: each player's character version;
                                    // 14: the rooms branch (0.3.0-rooms.N), so its builds and 0.2.x refuse each other
                                    // (12 was its number before main took 13; a main bump past 13 takes 15): the seat
                                    // token in Hello; 16: the rooms branch's room titles (SFV's lounge comments, the
-                                   // keeper's room request and public list; 15 stays main's next)
+                                   // keeper's room request and public list; 15 stays main's next); 17: no frozen-state
+                                   // copy (types 6-8 and Loaded's reconciled flag gone)
 // Message size limits: under Weyvelength's 1024-byte datagrams.
-constexpr size_t kHashesPerMessage = 100;
-constexpr size_t kRegionsPerRequest = 200;
-constexpr size_t kStateChunk = 900;
 constexpr size_t kInputsPerMessage = 60;
 // The session's matches a host keeps for spectators (streams and starting
-// states): a table's set of first to 20 has up to 39 games, and a late viewer
+// checksums): a table's set of first to 20 has up to 39 games, and a late viewer
 // starts at its first (M5). The list goes out in slices of
 // kMatchesPerMessage (about 60 bytes an entry: one datagram), each with its
 // place in the list (Message::sliceAt, sliceOf).
@@ -76,9 +68,6 @@ enum class Type : uint8_t {
     Reject = 3,
     Loaded = 4,
     Bye = 5,
-    StateHashes = 6,
-    StateRequest = 7,
-    StateData = 8,
     Accept = 9,
     PlayerState = 10,
     SessionState = 11,
@@ -174,18 +163,7 @@ struct Message {
     uint64_t matchId = 0;
     // Loaded
     uint32_t stateChecksum = 0;
-    bool reconciled = false; // the joiner has taken the host's differing values
-    // StateHashes: hashes[i] is region first + i of `total`
     uint32_t first = 0;
-    uint32_t total = 0;
-    std::vector<uint64_t> hashes;
-    // StateRequest: host region indices
-    std::vector<uint32_t> regions;
-    // StateData: bytes [offset, offset + bytes.size()) of region `region`,
-    // which is `total` bytes long
-    uint32_t region = 0;
-    uint32_t offset = 0;
-    std::vector<uint8_t> bytes;
     // Inputs: frames first .. first + frames.size() - 1; InputsAck: `first`
     // is the next frame wanted
     std::vector<FrameRecord> frames;

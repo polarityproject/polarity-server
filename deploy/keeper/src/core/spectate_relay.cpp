@@ -20,21 +20,8 @@ constexpr int64_t kHostSilenceMs = 15000;
 // After the host has left: how long viewers far behind are still served.
 constexpr int64_t kKeepAfterHostMs = 10 * 60 * 1000;
 constexpr int64_t kCloseAfterHostMs = 3000;
-// Region requests to the host: a batch at most this often, of at most this
-// many regions; a region asked for again only after kAskAgainMs.
-constexpr int64_t kAskEveryMs = 250;
-constexpr size_t kRegionsPerAsk = 64;
-constexpr int64_t kAskAgainMs = 1500;
 constexpr size_t kMaxGames = lobby::kKeptMatches;
-constexpr uint32_t kMaxRegionBytes = 8u << 20;
 constexpr uint32_t kMaxFrames = 1u << 20;
-// The relay's Loaded checksum: never the host's (a host whose state folds to
-// exactly 0 skips the hashes; so does one with reconcile_start off), so the
-// host sends its region hashes. Without them for kHashesWaitMs the relay
-// streams anyway, and a viewer whose state differs starts without them, as
-// it would from such a host.
-constexpr uint32_t kNoChecksum = 0;
-constexpr int64_t kHashesWaitMs = 3000;
 
 uint32_t Now32(int64_t ms) { return static_cast<uint32_t>(ms); }
 
@@ -89,7 +76,7 @@ const SpectateRelay::Game* SpectateRelay::Find(uint64_t id) const
 
 bool SpectateRelay::Complete(const Game& g) const
 {
-    return g.listed && g.entry.finished && g.frames.size() >= g.entry.frames && (g.hashesComplete || g.noHashes) && g.hasLoaded;
+    return g.listed && g.entry.finished && g.frames.size() >= g.entry.frames && g.hasLoaded;
 }
 
 int SpectateRelay::IndexOf(uint64_t id) const
@@ -151,22 +138,6 @@ void SpectateRelay::FromHost(const lobby::Message& m, int64_t nowMs)
             g->loaded = m;
             g->hasLoaded = true;
         }
-        break;
-    case lobby::Type::StateHashes: {
-        Game* g = Find(m.matchId);
-        if (!g || g->hashesComplete || m.total == 0 || m.total > 100000) break;
-        if (g->hashes.size() != m.total) {
-            g->hashes.assign(m.total, 0);
-            g->hashParts.assign((m.total + lobby::kHashesPerMessage - 1) / lobby::kHashesPerMessage, false);
-        }
-        if (m.first % lobby::kHashesPerMessage || m.first + m.hashes.size() > m.total) break;
-        std::copy(m.hashes.begin(), m.hashes.end(), g->hashes.begin() + m.first);
-        g->hashParts[m.first / lobby::kHashesPerMessage] = true;
-        g->hashesComplete = std::all_of(g->hashParts.begin(), g->hashParts.end(), [](bool b) { return b; });
-        break;
-    }
-    case lobby::Type::StateData:
-        if (Game* g = Find(m.matchId)) AddStateData(*g, m);
         break;
     case lobby::Type::Inputs:
         if (Game* g = Find(m.matchId)) AddFrames(*g, m);
@@ -232,23 +203,6 @@ void SpectateRelay::AddFrames(Game& g, const lobby::Message& m)
     }
 }
 
-void SpectateRelay::AddStateData(Game& g, const lobby::Message& m)
-{
-    if (m.total > kMaxRegionBytes || m.offset % lobby::kStateChunk || m.offset + m.bytes.size() > m.total) return;
-    Region& r = g.regions[m.region];
-    if (r.complete) return;
-    if (r.total != m.total || r.bytes.size() != m.total) {
-        r.total = m.total;
-        r.bytes.assign(m.total, 0);
-        r.chunks.assign((m.total + lobby::kStateChunk - 1) / lobby::kStateChunk, false);
-    }
-    std::copy(m.bytes.begin(), m.bytes.end(), r.bytes.begin() + m.offset);
-    if (!r.chunks.empty()) r.chunks[m.offset / lobby::kStateChunk] = true;
-    r.complete = std::all_of(r.chunks.begin(), r.chunks.end(), [](bool b) { return b; });
-    stats_.stateBytesFromHost += m.bytes.size();
-    if (r.complete) g.want.erase(m.region);
-}
-
 void SpectateRelay::CheckDecided()
 {
     // The same two play on into a next set (keeper again): the score starts
@@ -299,23 +253,12 @@ void SpectateRelay::StepHost(int64_t nowMs)
             upMatch_ = next;
             upStreaming_ = false;
             upLoadedMs_ = -1000000;
-            upSinceMs_ = nowMs;
         }
     }
     if (Game* g = Find(upMatch_)) {
         if (!upStreaming_) {
-            if (g->hasLoaded && !g->hashesComplete && !g->noHashes && nowMs - upSinceMs_ > kHashesWaitMs) {
-                g->noHashes = true;
-                Log("relay: no region hashes from the host for game " + std::to_string(IndexOf(g->id) + 1) + "; streaming without");
-            }
-            if ((g->hashesComplete || g->noHashes) && g->hasLoaded) {
-                lobby::Message done;
-                done.type = lobby::Type::Loaded;
-                done.matchId = g->id;
-                done.setup = g->loaded.setup;
-                done.stateChecksum = g->loaded.stateChecksum;
-                done.reconciled = true;
-                Up(done);
+            // The host's Loaded (its checksum, for the viewers), then the stream.
+            if (g->hasLoaded) {
                 upStreaming_ = true;
                 upAckMs_ = -1000000;
             }
@@ -325,8 +268,6 @@ void SpectateRelay::StepHost(int64_t nowMs)
                 loaded.type = lobby::Type::Loaded;
                 loaded.matchId = g->id;
                 loaded.setup = g->hasWelcome ? g->welcome.setup : g->entry.setup;
-                loaded.stateChecksum = kNoChecksum;
-                loaded.reconciled = false;
                 Up(loaded);
             }
         }
@@ -347,53 +288,6 @@ void SpectateRelay::StepHost(int64_t nowMs)
         ack.type = lobby::Type::InputsAck;
         ack.time = Now32(nowMs);
         Up(ack);
-    }
-
-    // Starting-state regions: what viewers asked for first, then, once the
-    // set is decided, the whole state of each game a viewer has not reached
-    // (the host is on its results screen; after it leaves nobody has them).
-    Game* ask = nullptr;
-    for (uint64_t id : order_) {
-        Game& g = games_.at(id);
-        if (!g.want.empty()) {
-            ask = &g;
-            break;
-        }
-    }
-    if (!ask && decided_) {
-        for (size_t i = 0; i < order_.size() && !ask; i++) {
-            Game& g = games_.at(order_[i]);
-            if (!g.hashesComplete) continue;
-            bool behind = false;
-            for (const auto& [id, v] : viewers_) behind |= IndexOf(v.match) < static_cast<int>(i);
-            if (!behind) continue;
-            for (uint32_t r = 0; r < g.hashes.size(); r++) {
-                const auto it = g.regions.find(r);
-                if (it == g.regions.end() || !it->second.complete) g.want.insert(r);
-            }
-            if (!g.want.empty()) {
-                Log("relay: taking game " + std::to_string(i + 1) + "'s starting state (" + std::to_string(g.want.size()) +
-                    " regions) for viewers behind");
-                ask = &g;
-            }
-        }
-    }
-    if (ask && nowMs - ask->askedMs >= kAskEveryMs) {
-        lobby::Message req;
-        req.type = lobby::Type::StateRequest;
-        req.matchId = ask->id;
-        for (uint32_t r : ask->want) {
-            // A region asked for is on its way: again only after a while.
-            const auto at = ask->askedAt.find(r);
-            if (at != ask->askedAt.end() && nowMs - at->second < kAskAgainMs) continue;
-            req.regions.push_back(r);
-            if (req.regions.size() >= kRegionsPerAsk) break;
-        }
-        if (!req.regions.empty()) {
-            ask->askedMs = nowMs;
-            for (uint32_t r : req.regions) ask->askedAt[r] = nowMs;
-            Up(req);
-        }
     }
 }
 
@@ -454,22 +348,8 @@ void SpectateRelay::FromViewer(uint64_t id, const lobby::Message& m, int64_t now
         if (v.match != m.matchId) v.decided = false;
         v.match = m.matchId;
         v.loaded = true;
-        v.checksum = m.stateChecksum;
-        v.reconciled = m.reconciled;
         if (const Game* g = Find(m.matchId); g && g->hasLoaded) Down(id, g->loaded);
         break;
-    case lobby::Type::StateRequest: {
-        Game* g = Find(m.matchId);
-        if (!g) break;
-        std::vector<uint32_t> have;
-        for (uint32_t r : m.regions) {
-            const auto reg = g->regions.find(r);
-            if (reg != g->regions.end() && reg->second.complete) have.push_back(r);
-            else if (r < g->hashes.size() || g->hashes.empty()) g->want.insert(r);
-        }
-        SendRegions(id, *g, have);
-        break;
-    }
     case lobby::Type::InputsAck:
         v.ackMatch = m.matchId;
         v.ackFirst = m.first;
@@ -505,25 +385,6 @@ void SpectateRelay::FromViewer(uint64_t id, const lobby::Message& m, int64_t now
 void SpectateRelay::ViewerGone(uint64_t id)
 {
     if (viewers_.erase(id)) Log("relay: a viewer left (" + std::to_string(viewers_.size()) + " watching)");
-}
-
-void SpectateRelay::SendRegions(uint64_t to, const Game& g, const std::vector<uint32_t>& regions)
-{
-    for (uint32_t index : regions) {
-        const Region& r = g.regions.at(index);
-        for (size_t at = 0; at < r.total || (r.total == 0 && at == 0); at += lobby::kStateChunk) {
-            lobby::Message d;
-            d.type = lobby::Type::StateData;
-            d.matchId = g.id;
-            d.region = index;
-            d.total = r.total;
-            d.offset = static_cast<uint32_t>(at);
-            const size_t n = std::min(lobby::kStateChunk, static_cast<size_t>(r.total) - at);
-            d.bytes.assign(r.bytes.begin() + static_cast<std::ptrdiff_t>(at), r.bytes.begin() + static_cast<std::ptrdiff_t>(at + n));
-            Down(to, d);
-            if (r.total == 0) break;
-        }
-    }
 }
 
 const SpectateRelay::Game* SpectateRelay::LastPlayed() const
@@ -649,20 +510,6 @@ void SpectateRelay::StepViewers(int64_t nowMs)
             Down(id, live->welcome);
         if (const Game* g = Find(v.match); g && !v.streaming) {
             if (g->hasLoaded) Down(id, g->loaded);
-            // A state that differs: the hashes, until it says it has reconciled.
-            if (v.loaded && !v.reconciled && g->hasLoaded && g->hashesComplete && v.checksum != g->loaded.stateChecksum) {
-                for (size_t first = 0; first < g->hashes.size(); first += lobby::kHashesPerMessage) {
-                    lobby::Message h;
-                    h.type = lobby::Type::StateHashes;
-                    h.matchId = g->id;
-                    h.first = static_cast<uint32_t>(first);
-                    h.total = static_cast<uint32_t>(g->hashes.size());
-                    const size_t n = std::min(lobby::kHashesPerMessage, g->hashes.size() - first);
-                    h.hashes.assign(g->hashes.begin() + static_cast<std::ptrdiff_t>(first),
-                                    g->hashes.begin() + static_cast<std::ptrdiff_t>(first + n));
-                    Down(id, h);
-                }
-            }
         }
         if (ViewerDone(v) || (hostLeft_ && nowMs - hostGoneMs_ > kKeepAfterHostMs)) {
             if (v.byes < 3 && nowMs - v.byeMs >= 500) {

@@ -1680,10 +1680,9 @@ void Keeper::PumpRelays(Room& room, int64_t nowMs)
         if (nowMs - r->statsMs >= 60000) {
             r->statsMs = nowMs;
             const RelayStats s = r->core->Stats();
-            Log("keeper: room %s: table %d: relay %s: %zu viewers, %zu games, %llu KB from the host (%llu KB of states), %llu KB to viewers",
+            Log("keeper: room %s: table %d: relay %s: %zu viewers, %zu games, %llu KB from the host, %llu KB to viewers",
                 room.code.c_str(), r->table + 1, r->relayCode.c_str(), s.viewers, s.games,
-                static_cast<unsigned long long>(s.bytesFromHost / 1024), static_cast<unsigned long long>(s.stateBytesFromHost / 1024),
-                static_cast<unsigned long long>(s.bytesToViewers / 1024));
+                static_cast<unsigned long long>(s.bytesFromHost / 1024), static_cast<unsigned long long>(s.bytesToViewers / 1024));
             if (s.viewers) Log("keeper: room %s: table %d: relay %s viewers: %s", room.code.c_str(), r->table + 1, r->relayCode.c_str(),
                                r->core->ViewersLine().c_str());
         }
@@ -1828,9 +1827,9 @@ void Keeper::EndRelay(Room& room, RelayLink& r, const char* why)
     if (r.ended) return;
     r.ended = true;
     const RelayStats s = r.core ? r.core->Stats() : RelayStats{};
-    Log("keeper: room %s: table %d: relay %s ends (%s): %zu games, %llu KB from the host (%llu KB of states), %llu KB to viewers",
+    Log("keeper: room %s: table %d: relay %s ends (%s): %zu games, %llu KB from the host, %llu KB to viewers",
         room.code.c_str(), r.table + 1, r.relayCode.c_str(), why, s.games, static_cast<unsigned long long>(s.bytesFromHost / 1024),
-        static_cast<unsigned long long>(s.stateBytesFromHost / 1024), static_cast<unsigned long long>(s.bytesToViewers / 1024));
+        static_cast<unsigned long long>(s.bytesToViewers / 1024));
     connector_->Cancel(r.upConnecting);
     connector_->Cancel(r.downConnecting);
     r.upConnecting = r.downConnecting = 0;
