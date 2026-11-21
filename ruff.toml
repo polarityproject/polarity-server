@@ -1,0 +1,9 @@
+# Python formatting and lint. `ruff format` is the standard and
+# `ruff format --check .` lists unformatted files. `ruff check .` is a report,
+# triaged by hand.
+required-version = "==0.17.6"
+line-length = 120
+target-version = "py312"
+
+[lint]
+extend-select = ["B", "UP"]

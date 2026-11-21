@@ -52,6 +52,13 @@ other, and update the server when the matching client release ships.
 The keeper's sources in `deploy/keeper/` are a copy of the client's
 `src/keeper/` and the code it shares; rebundle them when those change.
 
+## Formatting
+
+ruff 0.17.6 formats and checks the Python, set up in `ruff.toml`.
+`ruff format .` formats it, `ruff format --check .` lists the unformatted
+files, and `ruff check .` reports lint findings. The keeper's C++ follows the client's
+formatting.
+
 ## Changes
 
 See [CHANGELOG.md](CHANGELOG.md).
