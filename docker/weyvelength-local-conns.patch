@@ -1,0 +1,28 @@
+diff --git a/Server/src/weyvelength_server.cpp b/Server/src/weyvelength_server.cpp
+index 2bf0c19..af743c7 100644
+--- a/Server/src/weyvelength_server.cpp
++++ b/Server/src/weyvelength_server.cpp
+@@ -192,8 +192,9 @@ namespace Weyvelength {
+ 				continue;
+ 			}
+ 
++			// loopback is the host's own clients (a bot or keeper beside the server): never capped
+ 			auto open = _per_address.find(address);
+-			if (open != _per_address.end() && open->second >= _config.max_conns_per_ip) {
++			if (!address.is_loopback() && open != _per_address.end() && open->second >= _config.max_conns_per_ip) {
+ 				spdlog::warn("Refusing connection: {} already has {} open", address.to_string(), open->second);
+ 				socket.close(ec);
+ 				continue;
+diff --git a/docs/server.md b/docs/server.md
+index 15e6bb6..d26d299 100644
+--- a/docs/server.md
++++ b/docs/server.md
+@@ -51,7 +51,7 @@ A client that stops reading is dropped once `--max-queued-bytes` of replies and
+ 
+ ## Connection and room limits
+ 
+-One address may hold `--max-conns-per-ip` connections at once, and further ones are closed right after accepting. Players behind one NAT share an address, so raise it for LAN events or carrier grade NAT.
++One address may hold `--max-conns-per-ip` connections at once, and further ones are closed right after accepting. Loopback connections (clients on the server's own host) are not capped. Players behind one NAT share an address, so raise it for LAN events or carrier grade NAT.
+ 
+ A room holds at most `--max-room-members` clients. Joining a full room answers `WEYVE_ROOM_ERROR_ROOM_CLOSED`, the same as a room the host closed, and only after the password check passes.
+ 

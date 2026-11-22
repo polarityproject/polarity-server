@@ -34,6 +34,8 @@ services:
     image: sfvr-rooms/server:latest
     environment:
       SFVR_PORT: ${SFVR_PORT:-5555}
+      # Open connections from one address (players behind one NAT share it).
+      MAX_CONNS_PER_IP: ${MAX_CONNS_PER_IP:-16}
       # A country for LAN addresses: testing the stack on a PC only.
       GEOIP_PRIVATE: ${GEOIP_PRIVATE:-}
     volumes: ["ice:/data", "geoip:/geoip:ro", "stats:/stats"]

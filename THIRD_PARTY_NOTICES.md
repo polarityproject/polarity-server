@@ -10,8 +10,8 @@ from other projects. Each keeps its own license, listed here.
 These files change [Weyvelength](https://github.com/HeatXD/Weyvelength), the
 rooms server, and contain parts of its source:
 
-- `deploy/weyvelength-*.patch`
 - `docker/weyvelength-geoip.patch`
+- `docker/weyvelength-local-conns.patch`
 - `deploy/keeper/third_party/*.patch`
 
 Weyvelength is copyright (c) 2026, Jamie Meyer & Contributors, under the
@@ -45,7 +45,7 @@ The images then contain this code:
 
 | Component | Image | License | Copyright |
 | --- | --- | --- | --- |
-| [Weyvelength](https://github.com/HeatXD/Weyvelength) (commit d4e25c7) | server, keeper | BSD 2-Clause | Jamie Meyer & Contributors |
+| [Weyvelength](https://github.com/HeatXD/Weyvelength) (commit 4d71aef) | server, keeper | BSD 2-Clause | Jamie Meyer & Contributors |
 | [asio](https://github.com/chriskohlhoff/asio) | server, keeper | Boost Software License 1.0 | Christopher M. Kohlhoff |
 | [spdlog](https://github.com/gabime/spdlog) and its bundled [{fmt}](https://github.com/fmtlib/fmt) | server, keeper | MIT | Gabi Melman and spdlog contributors; Victor Zverovich and {fmt} contributors |
 | [zpp_bits](https://github.com/eyalz800/zpp_bits) | server, keeper | MIT | Eyal Z |

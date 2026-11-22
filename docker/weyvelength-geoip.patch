@@ -81,7 +81,7 @@ index 0000000..0ed8ee2
 +	};
 +}
 diff --git a/Server/include/weyvelength_server.h b/Server/include/weyvelength_server.h
-index 896d780..68b4a62 100644
+index fec5296..2fedaf6 100644
 --- a/Server/include/weyvelength_server.h
 +++ b/Server/include/weyvelength_server.h
 @@ -16,6 +16,7 @@
@@ -92,9 +92,9 @@ index 896d780..68b4a62 100644
  #include "protocol.h"
  
  namespace Weyvelength {
-@@ -25,12 +26,27 @@ namespace Weyvelength {
- 		uint32_t room_code_length = 0; // 0 = use the default (8)
- 		uint32_t room_list_cooldown_ms = 0; // 0 = use the default (1000)
+@@ -30,12 +31,27 @@ namespace Weyvelength {
+ 		uint32_t max_room_members = 0; // 0 = use the default (64)
+ 		uint32_t idle_timeout_ms = 0; // 0 = use the default (30000); keep it well above the client's 10 s keepalive
  		Proto::IceServers ice; // stun/turn handed to every client on connect
 +		std::string geoip_path; // an IP-to-country database (MaxMind DB format); empty = no countries
 +		std::string geoip_private; // the country for loopback/private addresses (testing on a LAN)
@@ -118,9 +118,9 @@ index 896d780..68b4a62 100644
 +		std::string country; // from the address at connect (GeoIp); "" = unknown
 +		bool hide_country = false; // asked with "nocc" (hide_country_key)
  		asio::ip::tcp::socket socket;
+ 		asio::ip::address address; // the peer, counted against max_conns_per_ip
  
- 		std::deque<std::vector<std::byte>> out; // outbound queue; WriteLoop is the sole writer
-@@ -91,6 +107,8 @@ namespace Weyvelength {
+@@ -101,6 +117,8 @@ namespace Weyvelength {
  		void HandleListRooms(const std::shared_ptr<Connection>& conn, const Proto::ListRooms& msg);
  
  		void LeaveRoom(const std::shared_ptr<Connection>& conn);
@@ -129,7 +129,7 @@ index 896d780..68b4a62 100644
  		const std::string& MemberName(uint32_t id) const; // the default if the connection is gone
  		Room* HostRoom(const std::shared_ptr<Connection>& conn); // the sender's room if they host it, else null after sending the error
  
-@@ -98,6 +116,7 @@ namespace Weyvelength {
+@@ -108,6 +126,7 @@ namespace Weyvelength {
  		void ReleaseId(uint32_t id);
  
  		asio::awaitable<void> AcceptLoop();
@@ -137,7 +137,7 @@ index 896d780..68b4a62 100644
  		asio::awaitable<void> Session(std::shared_ptr<Connection> conn);
  		asio::awaitable<void> ReadLoop(std::shared_ptr<Connection> conn);
  		asio::awaitable<void> WriteLoop(std::shared_ptr<Connection> conn);
-@@ -112,5 +131,6 @@ namespace Weyvelength {
+@@ -124,5 +143,6 @@ namespace Weyvelength {
  		uint32_t _next_slot = 1;   // slots never yet handed out; 0 reserved as "none"
  
  		ServerConfig _config;
@@ -271,10 +271,10 @@ index 0000000..733ade5
 +	}
 +}
 diff --git a/Server/src/main.cpp b/Server/src/main.cpp
-index ae1c0d1..e6e5cb1 100644
+index 5caf7ab..0456372 100644
 --- a/Server/src/main.cpp
 +++ b/Server/src/main.cpp
-@@ -29,7 +29,12 @@ static void PrintUsage()
+@@ -35,7 +35,12 @@ static void PrintUsage()
  		"  --stun-port PORT             default 19302\n"
  		"  --turn HOST:PORT:USER:PASS   repeatable\n"
  		"  --ice-file PATH              read stun/turn from a file and reread it as it expires,\n"
@@ -288,7 +288,7 @@ index ae1c0d1..e6e5cb1 100644
  }
  
  // TURN servers arrive as one "host:port:user:pass" argument per --turn flag.
-@@ -200,6 +205,12 @@ static bool ParseArgs(int argc, char* argv[], ServerConfig& config, std::string&
+@@ -223,6 +228,12 @@ static bool ParseArgs(int argc, char* argv[], ServerConfig& config, std::string&
  			config.ice.stun_port = (uint16_t)std::strtoul(next(), nullptr, 10);
  		} else if (arg == "--ice-file") {
  			ice_path = next();
@@ -302,7 +302,7 @@ index ae1c0d1..e6e5cb1 100644
  			Proto::TurnServer turn;
  			if (!ParseTurnServer(next(), turn)) {
 diff --git a/Server/src/weyvelength_server.cpp b/Server/src/weyvelength_server.cpp
-index e859125..30955a7 100644
+index daf7964..2bf0c19 100644
 --- a/Server/src/weyvelength_server.cpp
 +++ b/Server/src/weyvelength_server.cpp
 @@ -2,6 +2,8 @@
@@ -314,7 +314,7 @@ index e859125..30955a7 100644
  #include <random>
  #include <string>
  #include <utility>
-@@ -95,6 +97,8 @@ namespace Weyvelength {
+@@ -117,6 +119,8 @@ namespace Weyvelength {
  		_acceptor.listen(asio::socket_base::max_listen_connections, ec);
  		if (ec) return false;
  
@@ -323,7 +323,7 @@ index e859125..30955a7 100644
  		spdlog::info("Listening on port {}", config.port);
  		LogIceServers(_config.ice);
  		return true;
-@@ -103,9 +107,36 @@ namespace Weyvelength {
+@@ -125,9 +129,36 @@ namespace Weyvelength {
  	void Server::Run()
  	{
  		asio::co_spawn(_context, AcceptLoop(), asio::detached);
@@ -360,20 +360,15 @@ index e859125..30955a7 100644
  	void Server::Stop()
  	{
  		_context.stop();
-@@ -140,7 +171,12 @@ namespace Weyvelength {
- 				continue;
- 			}
+@@ -177,6 +208,7 @@ namespace Weyvelength {
  
-+			// The country from the address (the client's own claim is never asked).
-+			asio::error_code peer_ec;
-+			const auto peer = socket.remote_endpoint(peer_ec);
  			auto conn = std::make_shared<Connection>(id, std::move(socket));
-+			if (!peer_ec)
-+				conn->country = _geoip.Country(peer.address());
+ 			conn->address = address;
++			conn->country = _geoip.Country(address); // from the address; the client's own claim is never asked
+ 			_per_address[address]++;
  			_connections.emplace(id, conn);
  
- 			spdlog::info("Client {} connected", id);
-@@ -328,6 +364,7 @@ namespace Weyvelength {
+@@ -389,6 +421,7 @@ namespace Weyvelength {
  		conn->room = code;
  		SendTo(conn->id, Proto::AssignRoomId{ code });
  		SendTo(conn->id, Proto::HostChanged{ conn->id }); // the host cache has a single source: this event
@@ -381,7 +376,7 @@ index e859125..30955a7 100644
  
  		spdlog::info("Client {} created room {}", conn->id, code);
  	}
-@@ -391,6 +428,7 @@ namespace Weyvelength {
+@@ -459,6 +492,7 @@ namespace Weyvelength {
  
  		room.members.push_back(conn->id);
  		conn->room = msg.id;
@@ -389,7 +384,7 @@ index e859125..30955a7 100644
  
  		spdlog::info("Client {} joined room {}", conn->id, msg.id);
  	}
-@@ -501,8 +539,47 @@ namespace Weyvelength {
+@@ -566,8 +600,47 @@ namespace Weyvelength {
  		SendToMany(room.members, Proto::RoomDataChanged{ msg.key, msg.value });
  	}
  
@@ -437,7 +432,7 @@ index e859125..30955a7 100644
  		auto it = _rooms.find(conn->room);
  		if (it == _rooms.end()) {
  			SendTo(conn->id, Proto::RoomError{ Proto::RoomErrorCode::NotInRoom, {} });
-@@ -525,7 +602,8 @@ namespace Weyvelength {
+@@ -590,7 +663,8 @@ namespace Weyvelength {
  		else {
  			auto& data = room.member_data[conn->id];
  			auto [entry, inserted] = data.try_emplace(msg.key, msg.value);

@@ -99,6 +99,8 @@ sudo ufw enable
 The two scripts from `deploy/` (copied in step 5) then replace ufw's own
 connection limit with the looser one players need behind shared addresses,
 and send TCP 443 to the server for networks that only let common ports out.
+That limit is on new connections a minute; the server itself caps the
+connections one address holds open (`MAX_CONNS_PER_IP` in `.env`, 16).
 Run them after step 5:
 
 ```bash
