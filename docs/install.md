@@ -127,20 +127,20 @@ instead saves typing, but that group is as good as root on the machine.
 
 ## 5. The files
 
-On your PC, after any keeper change, copy the keeper's sources from the mod
-repository into this one (it writes `deploy/keeper/`):
+On your PC, in the folder that holds the polarity-client and
+polarity-server checkouts, copy the keeper's sources from the mod repository
+into this one after any keeper change (it writes `deploy/keeper/`):
 
 ```powershell
-D:\SteamLibrary\steamapps\common\StreetFighterV\polarity-client\scripts\keeper-bundle.ps1
+polarity-client\scripts\keeper-bundle.ps1
 ```
 
-Commit that, then pack the `main` branch and copy it over. `git archive`
-packs committed files only, so a test key or settings file left in
-`docker/` from trying the stack on your PC stays there:
+Commit that, then pack the `main` branch and copy it over from the same
+folder. `git archive` packs committed files only, so a test key or settings
+file left in `docker/` from trying the stack on your PC stays there:
 
 ```powershell
-cd D:\SteamLibrary\steamapps\common\StreetFighterV
-git -C polarity-server archive --format=tar.gz -o ..\sfvr-rooms.tgz main
+git -C polarity-server archive --format=tar.gz -o sfvr-rooms.tgz main
 scp sfvr-rooms.tgz polarityadmin@203.0.113.10:~
 ```
 
