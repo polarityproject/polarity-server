@@ -1,6 +1,8 @@
+diff --git a/Client/include/private/client.h b/Client/include/private/client.h
+index 7fd2a9d..d403ac1 100644
 --- a/Client/include/private/client.h
 +++ b/Client/include/private/client.h
-@@ -64,6 +64,7 @@
+@@ -65,6 +65,7 @@ namespace Weyvelength {
  		const std::string* TurnHost() const; // the first TURN server handed to us, or null
  		void SetRelayOnly(bool on); // testing: take only a peer's relay candidates, so links go through TURN
  		void SetPortRange(uint16_t begin, uint16_t end); // links built from now on bind a local UDP port in [begin, end]; 0 0: any
@@ -8,17 +10,19 @@
  
  		uint32_t Id() const;  // 0 until the server has assigned one
  		const std::string& Name() const; // our own name, as the server accepted it
-@@ -119,6 +120,7 @@
+@@ -121,6 +122,7 @@ namespace Weyvelength {
  		Proto::IceServers _ice; // handed to us by the server; feeds every new link
  		bool _relay_only = false;
  		uint16_t _port_begin = 0, _port_end = 0;
 +		bool _link_mux = false;
  
- 		std::queue<Proto::ServerMessage> _inbox;
- 		std::queue<std::pair<uint32_t, Proto::P2PMessage>> _p2p_inbox;
+ 		std::chrono::steady_clock::time_point _last_sent{};
+ 		uint32_t _keepalives = 0; // our own heartbeats still awaiting their pong, which Next() never shows
+diff --git a/Client/include/weyvelength.h b/Client/include/weyvelength.h
+index 5e67d9c..a76de5f 100644
 --- a/Client/include/weyvelength.h
 +++ b/Client/include/weyvelength.h
-@@ -229,6 +229,11 @@
+@@ -229,6 +229,11 @@ WEYVE_API void weyve_set_relay_only(WeyveClient* client, bool on);
  // Links built from now on bind their local UDP port in [begin, end] (a
  // server behind a firewall opens that range); 0 and 0: any port.
  WEYVE_API void weyve_set_port_range(WeyveClient* client, uint16_t begin, uint16_t end);
@@ -30,9 +34,11 @@
  
  // --- cached room state ---
  // Getters below read the client's cache; nothing blocks or hits the network.
+diff --git a/Client/src/p2p_mesh.cpp b/Client/src/p2p_mesh.cpp
+index 99007ff..6a17959 100644
 --- a/Client/src/p2p_mesh.cpp
 +++ b/Client/src/p2p_mesh.cpp
-@@ -121,6 +121,11 @@
+@@ -121,6 +121,11 @@ namespace Weyvelength {
  		_port_end = end;
  	}
  
@@ -44,7 +50,7 @@
  	void Client::SetRelayOnly(bool on)
  	{
  		_relay_only = on;
-@@ -165,11 +170,14 @@
+@@ -165,11 +170,14 @@ namespace Weyvelength {
  		}
  
  		juice_config_t config{};
@@ -60,7 +66,7 @@
  		config.turn_servers = turn.empty() ? nullptr : turn.data();
  		config.turn_servers_count = (int)turn.size();
  		config.local_port_range_begin = _port_begin;
-@@ -195,10 +203,15 @@
+@@ -195,10 +203,15 @@ namespace Weyvelength {
  		if (juice_get_local_description(link.agent, sdp, sizeof(sdp)) != JUICE_ERR_SUCCESS)
  			return false;
  
@@ -77,7 +83,7 @@
  	}
  
  	void Client::FlushLink(PeerLink& link)
-@@ -272,8 +285,8 @@
+@@ -272,8 +285,8 @@ namespace Weyvelength {
  			link->remote_set = true;
  		}
  
@@ -88,9 +94,11 @@
  	}
  
  	void Client::PollPeers()
+diff --git a/Client/src/weyvelength.cpp b/Client/src/weyvelength.cpp
+index e37aeab..f9a65c2 100644
 --- a/Client/src/weyvelength.cpp
 +++ b/Client/src/weyvelength.cpp
-@@ -195,6 +195,11 @@
+@@ -195,6 +195,11 @@ void weyve_set_port_range(WeyveClient* client, uint16_t begin, uint16_t end)
  	client->client.SetPortRange(begin, end);
  }
  

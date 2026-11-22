@@ -1,7 +1,10 @@
+// The keeper's spectator relay: the host's side and the viewers' (docs/keeper.md).
+
 #include "core/spectate_relay.h"
 
 #include <algorithm>
 #include <cstdio>
+#include <limits>
 
 namespace sfv {
 
@@ -13,15 +16,18 @@ constexpr int64_t kAckEveryMs = 100;
 constexpr int64_t kBeatMs = 250;
 constexpr int64_t kListEveryMs = 1000;
 constexpr int64_t kStreamResendMs = 300;
-constexpr int64_t kWelcomeAfterMs = 1500; // after a viewer's Accept (its list first)
-constexpr int kBatchesAhead = 4;          // as the host's (netplay_driver.cpp kStreamBatchesAhead)
+constexpr int64_t kWelcomeAfterMs = 1500;
+constexpr int kBatchesAhead = 4;
 constexpr int64_t kViewerSilenceMs = 10000;
 constexpr int64_t kHostSilenceMs = 15000;
-// After the host has left: how long viewers far behind are still served.
 constexpr int64_t kKeepAfterHostMs = 10 * 60 * 1000;
 constexpr int64_t kCloseAfterHostMs = 3000;
 constexpr size_t kMaxGames = lobby::kKeptMatches;
 constexpr uint32_t kMaxFrames = 1u << 20;
+constexpr int64_t kLongAgoMs = -1000000;
+constexpr int kByesSent = 3;
+constexpr int64_t kByeEveryMs = 500;
+constexpr int64_t kDoneGraceMs = 5000;
 
 uint32_t Now32(int64_t ms) { return static_cast<uint32_t>(ms); }
 
@@ -90,8 +96,6 @@ void SpectateRelay::HostGone(int64_t nowMs) {
         " viewers");
 }
 
-// ----- the host ----------------------------------------------------------------
-
 void SpectateRelay::FromHost(const lobby::Message& m, int64_t nowMs) {
     if (hostLeft_) return;
     hostHeardMs_ = nowMs;
@@ -102,10 +106,8 @@ void SpectateRelay::FromHost(const lobby::Message& m, int64_t nowMs) {
             accepted_ = true;
             break;
         case lobby::Type::Reject:
-            // The host does not know this member is the keeper yet (its proof
-            // arrives through the server): Hello again in a moment.
             if (!accepted_) Log("relay: the host turned the relay away (" + std::to_string(static_cast<int>(m.reason)) + "); trying again");
-            helloMs_ = nowMs + 1000;
+            helloMs_ = nowMs + kHelloEveryMs;
             break;
         case lobby::Type::SessionState:
             state_ = m;
@@ -148,11 +150,6 @@ void SpectateRelay::OnHostList(const lobby::Message& m) {
     if (hostSlices_.size() != m.sliceOf) hostSlices_.assign(m.sliceOf, lobby::MatchEntry{});
     for (size_t i = 0; i < m.matches.size() && m.sliceAt + i < hostSlices_.size(); i++) hostSlices_[m.sliceAt + i] = m.matches[i];
     if (!std::all_of(hostSlices_.begin(), hostSlices_.end(), [](const lobby::MatchEntry& e) { return e.id != 0; })) return;
-    // The host's order. Games it no longer lists (older ones it dropped) stay
-    // in front, in their order; one known only from its Welcome so far (the
-    // next game, before the host's list has it) stays after: viewers take
-    // the next game by its place in the list (it once came first, and live
-    // viewers loaded game 1 again for game 2).
     std::vector<uint64_t> listed, front, back;
     for (const lobby::MatchEntry& e : hostSlices_) {
         Game& g = GameOf(e.id);
@@ -190,8 +187,6 @@ void SpectateRelay::AddFrames(Game& g, const lobby::Message& m) {
 }
 
 void SpectateRelay::CheckDecided() {
-    // The same two play on into a next set (keeper again): the score starts
-    // over, and the set's end is to come again.
     if (decided_ && haveState_ && state_.seats[0].wins < config_.firstTo && state_.seats[1].wins < config_.firstTo) {
         decided_ = false;
         Log("relay: the next set");
@@ -222,7 +217,6 @@ void SpectateRelay::StepHost(int64_t nowMs) {
         }
         return;
     }
-    // The game to take: the oldest one the host has that is not in hand yet.
     const Game* up = Find(upMatch_);
     if (!up || Complete(*up)) {
         uint64_t next = 0;
@@ -236,15 +230,14 @@ void SpectateRelay::StepHost(int64_t nowMs) {
         if (next != upMatch_) {
             upMatch_ = next;
             upStreaming_ = false;
-            upLoadedMs_ = -1000000;
+            upLoadedMs_ = kLongAgoMs;
         }
     }
     if (Game* g = Find(upMatch_)) {
         if (!upStreaming_) {
-            // The host's Loaded (its checksum, for the viewers), then the stream.
             if (g->hasLoaded) {
                 upStreaming_ = true;
-                upAckMs_ = -1000000;
+                upAckMs_ = kLongAgoMs;
             } else if (nowMs - upLoadedMs_ >= kLoadedEveryMs) {
                 upLoadedMs_ = nowMs;
                 lobby::Message loaded;
@@ -264,7 +257,6 @@ void SpectateRelay::StepHost(int64_t nowMs) {
             Up(ack);
         }
     } else if (nowMs - upAckMs_ >= kBeatMs) {
-        // All in hand: a heartbeat (matchId 0: not streaming anything).
         upAckMs_ = nowMs;
         lobby::Message ack;
         ack.type = lobby::Type::InputsAck;
@@ -272,8 +264,6 @@ void SpectateRelay::StepHost(int64_t nowMs) {
         Up(ack);
     }
 }
-
-// ----- the viewers ----------------------------------------------------------------
 
 void SpectateRelay::FromViewer(uint64_t id, const lobby::Message& m, int64_t nowMs) {
     auto it = viewers_.find(id);
@@ -309,9 +299,6 @@ void SpectateRelay::FromViewer(uint64_t id, const lobby::Message& m, int64_t now
         out.role = lobby::Role::Spectator;
         out.name = haveState_ ? state_.seats[0].name : std::string();
         Down(id, out);
-        // The set's games at once: a table viewer starts at the first, and
-        // with the live game's Welcome first it loaded that one, then the
-        // first (half a minute lost).
         SendList(nowMs, id);
         return;
     }
@@ -375,10 +362,6 @@ const SpectateRelay::Game* SpectateRelay::LastPlayed() const {
 }
 
 bool SpectateRelay::ViewerDone(const Viewer& v) const {
-    // The host gone, nothing more comes: done once on the last game played
-    // and its battle at the result, or played through every frame there is
-    // (a set that broke off mid-game). `first` alone is not it: a viewer
-    // takes the frames far ahead of what it shows.
     if (!hostLeft_) return false;
     const Game* last = LastPlayed();
     if (!last) return true;
@@ -457,13 +440,8 @@ void SpectateRelay::StepViewers(int64_t nowMs) {
     for (auto& [id, v] : viewers_) {
         if (haveState_) {
             lobby::Message st = state_;
-            st.spectators = static_cast<uint8_t>(std::min<size_t>(viewers_.size(), 255));
+            st.spectators = static_cast<uint8_t>(std::min<size_t>(viewers_.size(), std::numeric_limits<uint8_t>::max()));
             if (hostLeft_) st.phase = lobby::SessionPhase::PostMatch;
-            // A player chose character select: only a viewer at the live
-            // game's result goes to the select screen with them (and stays
-            // there while they are on it). One still playing a game, the
-            // live one or an earlier one, is told the match goes on: the
-            // select phase took it out of its game, which it lost the rest of.
             if (st.phase == lobby::SessionPhase::Lobby) {
                 if (live && v.match == live->id && v.decided) v.inSelect = true;
                 if (!v.inSelect && v.match) st.phase = lobby::SessionPhase::Match;
@@ -472,19 +450,16 @@ void SpectateRelay::StepViewers(int64_t nowMs) {
             }
             st.time = Now32(nowMs);
             st.echo = v.heardTime;
-            st.echoAge = static_cast<uint16_t>(std::clamp<int64_t>(nowMs - v.heardTimeAtMs, 0, 65535));
+            st.echoAge = static_cast<uint16_t>(std::clamp<int64_t>(nowMs - v.heardTimeAtMs, 0, std::numeric_limits<uint16_t>::max()));
             Down(id, st);
         }
-        // The players' match: Welcome to whoever is not on it (a viewer still
-        // on an earlier game takes it up once that one has ended).
-        // Not in a new viewer's first moments: the list comes first (Accept).
         if (live && live->hasWelcome && !lobbyPhase && v.match != live->id && nowMs - v.acceptedMs >= kWelcomeAfterMs)
             Down(id, live->welcome);
         if (const Game* g = Find(v.match); g && !v.streaming) {
             if (g->hasLoaded) Down(id, g->loaded);
         }
         if (ViewerDone(v) || (hostLeft_ && nowMs - hostGoneMs_ > kKeepAfterHostMs)) {
-            if (v.byes < 3 && nowMs - v.byeMs >= 500) {
+            if (v.byes < kByesSent && nowMs - v.byeMs >= kByeEveryMs) {
                 lobby::Message bye;
                 bye.type = lobby::Type::Bye;
                 bye.text = byeText_;
@@ -513,7 +488,7 @@ void SpectateRelay::Step(int64_t nowMs) {
 bool SpectateRelay::Done(int64_t nowMs) const {
     if (!hostLeft_) return false;
     if (viewers_.empty() && nowMs - hostGoneMs_ >= kCloseAfterHostMs) return true;
-    return nowMs - hostGoneMs_ > kKeepAfterHostMs + 5000;
+    return nowMs - hostGoneMs_ > kKeepAfterHostMs + kDoneGraceMs;
 }
 
 std::string SpectateRelay::ViewersLine() const {

@@ -43,7 +43,4 @@ std::string FormatRules(const Rules& rules);
 // version, a value the game does not allow, a field missing or twice.
 bool ParseRules(std::string_view text, Rules* out, std::string* error = nullptr);
 
-// "First to 2 · winner stays, up to 3 · 99 seconds" (the table's summary line).
-std::string DescribeRules(const Rules& rules);
-
 } // namespace sfv

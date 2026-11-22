@@ -1,8 +1,8 @@
 diff --git a/Client/include/private/client.h b/Client/include/private/client.h
-index ceccc4a..8db02e2 100644
+index 2eff36e..eac96c1 100644
 --- a/Client/include/private/client.h
 +++ b/Client/include/private/client.h
-@@ -60,6 +60,9 @@ namespace Weyvelength {
+@@ -61,6 +61,9 @@ namespace Weyvelength {
  		bool SendP2P(uint32_t id, const Proto::P2PMessage& msg); // direct to a room member; the first send builds the link, queued until it connects
  		bool NextP2P(uint32_t& from, Proto::P2PMessage& out); // one received datagram per call
  		bool PeerConnectedP2P(uint32_t id) const; // is a direct link to this member up right now?
@@ -12,16 +12,16 @@ index ceccc4a..8db02e2 100644
  
  		uint32_t Id() const;  // 0 until the server has assigned one
  		const std::string& Name() const; // our own name, as the server accepted it
-@@ -113,6 +116,7 @@ namespace Weyvelength {
+@@ -115,6 +118,7 @@ namespace Weyvelength {
  		std::unique_ptr<P2PMesh> _mesh;
  
  		Proto::IceServers _ice; // handed to us by the server; feeds every new link
 +		bool _relay_only = false;
  
- 		std::queue<Proto::ServerMessage> _inbox;
- 		std::queue<std::pair<uint32_t, Proto::P2PMessage>> _p2p_inbox;
+ 		std::chrono::steady_clock::time_point _last_sent{};
+ 		uint32_t _keepalives = 0; // our own heartbeats still awaiting their pong, which Next() never shows
 diff --git a/Client/include/weyvelength.h b/Client/include/weyvelength.h
-index ba170f2..9851d51 100644
+index a22dd55..cc2eeee 100644
 --- a/Client/include/weyvelength.h
 +++ b/Client/include/weyvelength.h
 @@ -211,6 +211,22 @@ WEYVE_API bool weyve_send_p2p(WeyveClient* client, uint32_t id, const void* data
@@ -48,10 +48,10 @@ index ba170f2..9851d51 100644
  // Getters below read the client's cache; nothing blocks or hits the network.
  
 diff --git a/Client/src/client.cpp b/Client/src/client.cpp
-index d36ce8b..e40708c 100644
+index 96ffe6b..f7d58e9 100644
 --- a/Client/src/client.cpp
 +++ b/Client/src/client.cpp
-@@ -51,11 +51,16 @@ namespace Weyvelength {
+@@ -56,11 +56,16 @@ namespace Weyvelength {
  
  	bool Client::Poll()
  	{
@@ -69,8 +69,8 @@ index d36ce8b..e40708c 100644
 +		}
  
  		PollPeers(); // may queue signal frames; the flush below sends them
- 		return FlushServer();
-@@ -444,8 +449,10 @@ namespace Weyvelength {
+ 		KeepAlive();
+@@ -463,8 +468,10 @@ namespace Weyvelength {
  
  	bool Client::DisconnectServer()
  	{

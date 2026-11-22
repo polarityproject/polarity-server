@@ -1,15 +1,4 @@
-// polarity-keeper: see keeper.h.
-//
-//   polarity-keeper --key <file> [--server host:port] [--state <file>] [--words <file>] [--ports A-B] [--per-link-ports] [--protocol N]
-//               [--metrics <file.prom>] [--status <file.json>] [--server-stats <file.json>]
-//   polarity-keeper --new-key <file>    writes a key, prints its public half
-//
-// Logs to stdout (the journal on the server). Every 5 s, when asked: its
-// metrics in the Prometheus text format (--metrics, for node_exporter's
-// textfile collector) and the public room list as JSON (--status, for the
-// rooms API), each written to a temporary file and renamed over the old.
-// --server-stats: the rooms server's own counts (its --stats), for the
-// players online in --status.
+// polarity-keeper: the rooms keeper's process: options, the loop, metrics and status files (docs/keeper.md).
 
 #include "core/lobby.h"
 #include "keeper/keeper.h"
@@ -30,10 +19,10 @@ using namespace sfv::keeper;
 
 namespace {
 
+constexpr int64_t kFilesEveryMs = 5000;
+
 std::atomic<bool> g_stop{false};
 
-// Log lines and the time spent writing them (stdout can block: a slow
-// journal or Docker log driver holds up the whole loop).
 uint64_t g_logLines = 0;
 double g_logSeconds = 0;
 
@@ -44,7 +33,6 @@ std::atomic<bool> g_rereadWords{false};
 void OnHangUp(int) { g_rereadWords = true; }
 #endif
 
-// The word filter's list (keeper_protocol ParseWordFile): one entry a line.
 std::vector<std::string> ReadWords(const std::string& path) {
     std::ifstream in(path, std::ios::binary);
     std::stringstream text;
@@ -73,7 +61,6 @@ void LogLine(const std::string& line) {
     g_logSeconds += std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
 }
 
-// Writes beside the file and renames over it (readers never see half a file).
 void WriteFileAtomically(const std::string& path, const std::string& text) {
     const std::string temp = path + ".tmp";
     {
@@ -165,7 +152,6 @@ int main(int argc, char** argv) {
     std::signal(SIGINT, OnSignal);
     std::signal(SIGTERM, OnSignal);
 #ifdef SIGHUP
-    // The word list again (docker compose kill -s HUP keeper), without a restart.
     std::signal(SIGHUP, OnHangUp);
 #endif
     LogLine("polarity-keeper: lobby protocol " + std::to_string(o.protocol) + ", public key " + Hex(o.key.pub, 8) + "..., " +
@@ -179,7 +165,7 @@ int main(int argc, char** argv) {
         if (g_rereadWords.exchange(false) && !wordsPath.empty()) keeper.SetWords(ReadWords(wordsPath));
         keeper.Step(NowMs());
         const int64_t nowMs = NowMs();
-        if ((!metricsPath.empty() || !statusPath.empty()) && (filesAtMs < 0 || nowMs - filesAtMs >= 5000)) {
+        if ((!metricsPath.empty() || !statusPath.empty()) && (filesAtMs < 0 || nowMs - filesAtMs >= kFilesEveryMs)) {
             filesAtMs = nowMs;
             const auto sinceEpoch = std::chrono::system_clock::now().time_since_epoch();
             if (!metricsPath.empty()) {

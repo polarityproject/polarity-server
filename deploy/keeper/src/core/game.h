@@ -31,7 +31,7 @@ enum InputBit : PackedInput {
     kHK = 1 << 9,
     // Start (the game's own bit): skips the intro and the win poses, and
     // pauses during the fight. Netplay passes it on only when both players
-    // pressed it during a presentation (flow.h PresentationStart).
+    // pressed it during a presentation (flow.h FlowPresentationStart).
     kStart = 1 << 14,
 };
 
@@ -39,6 +39,8 @@ struct FrameInputs {
     PackedInput p[kNumPlayers] = {};
     bool operator==(const FrameInputs&) const = default;
 };
+
+constexpr uint8_t kCommentAuto = 0;
 
 // Field values are the game's own (battle_setup.h documents them).
 struct PlayerSetup {

@@ -1,4 +1,7 @@
+// The keeper's protocol: answers, room lists, tables and the rotation (docs/keeper.md).
+
 #include "core/keeper_protocol.h"
+#include "core/keeper_protocol_internal.h"
 
 #include <algorithm>
 #include <cctype>
@@ -7,13 +10,49 @@
 
 namespace sfv::keeper {
 
+using namespace detail;
+
 namespace {
 
 const char kAlphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 constexpr std::string_view kAnswerMagic = "SFVK1";
+constexpr size_t kMaxNumberDigits = 10;
+constexpr size_t kTableFieldsBefore = 15, kTableFieldsRelay = 16, kTableFieldsAgain = 17;
+constexpr size_t kTableCodeField = 6, kTableWatchField = 15, kTableAgainField = 16;
+constexpr int64_t kMaxScore = 99, kMaxStreak = 999;
+enum class ListGroup { OpenSeats,
+                       RoomToQueue,
+                       Full };
+
+std::string Clean(std::string_view text) {
+    std::string s;
+    for (char ch : text) {
+        const auto c = static_cast<unsigned char>(ch);
+        if (c < 0x20 || ch == ',') continue;
+        s += ch;
+    }
+    return s;
+}
+
+std::string Slot(const Listing& listing, const char* key) {
+    const auto it = listing.find(key);
+    return it != listing.end() ? it->second : std::string();
+}
+
+std::string CutUtf8(std::string s, size_t max) {
+    if (s.size() <= max) return s;
+    s.resize(max);
+    while (!s.empty() && (static_cast<unsigned char>(s.back()) & 0xC0) == 0x80) s.pop_back();
+    if (!s.empty() && (static_cast<unsigned char>(s.back()) & 0xC0) == 0xC0) s.pop_back();
+    return s;
+}
+
+} // namespace
+
+namespace detail {
 
 bool Number(std::string_view text, int64_t* out) {
-    if (text.empty() || text.size() > 10) return false;
+    if (text.empty() || text.size() > kMaxNumberDigits) return false;
     const auto [end, ec] = std::from_chars(text.data(), text.data() + text.size(), *out);
     return ec == std::errc() && end == text.data() + text.size();
 }
@@ -37,33 +76,7 @@ std::vector<std::string_view> Split(std::string_view text, char sep) {
     return parts;
 }
 
-// Names and codes in the list: no tabs, newlines or commas (the list's
-// separators), nothing below space.
-std::string Clean(std::string_view text) {
-    std::string s;
-    for (char ch : text) {
-        const auto c = static_cast<unsigned char>(ch);
-        if (c < 0x20 || ch == ',') continue;
-        s += ch;
-    }
-    return s;
-}
-
-std::string Slot(const Listing& listing, const char* key) {
-    const auto it = listing.find(key);
-    return it != listing.end() ? it->second : std::string();
-}
-
-// Cut to `max` bytes at a whole UTF-8 character.
-std::string CutUtf8(std::string s, size_t max) {
-    if (s.size() <= max) return s;
-    s.resize(max);
-    while (!s.empty() && (static_cast<unsigned char>(s.back()) & 0xC0) == 0x80) s.pop_back();
-    if (!s.empty() && (static_cast<unsigned char>(s.back()) & 0xC0) == 0xC0) s.pop_back();
-    return s;
-}
-
-} // namespace
+} // namespace detail
 
 std::string CleanCountry(std::string_view code) {
     if (code.size() != 2) return {};
@@ -102,7 +115,7 @@ bool Base64Decode(std::string_view text, std::vector<uint8_t>* out) {
             pad++;
             continue;
         }
-        if (pad) return false; // data after padding
+        if (pad) return false;
         const char* at = std::char_traits<char>::find(kAlphabet, 64, ch);
         if (!at) return false;
         n = (n << 6) | uint32_t(at - kAlphabet);
@@ -117,15 +130,12 @@ bool Base64Decode(std::string_view text, std::vector<uint8_t>* out) {
 
 namespace {
 
-// In the game's own order; names as the game spells them, in normal case.
 const struct {
     const char* code;
     const char* name;
 } kCharacters[kCharacterCount] = {
     {"RYU", "Ryu"}, {"VEG", "M. Bison"}, {"CNL", "Chun-Li"}, {"KEN", "Ken"}, {"KRN", "Karin"}, {"ZGF", "Zangief"}, {"DSM", "Dhalsim"}, {"NSH", "Nash"}, {"BLR", "Vega"}, {"JRI", "Juri"}, {"BRD", "Birdie"}, {"RMK", "R. Mika"}, {"RSD", "Rashid"}, {"FAN", "F.A.N.G"}, {"LAR", "Laura"}, {"NCL", "Necalli"}, {"CMY", "Cammy"}, {"GUL", "Guile"}, {"IBK", "Ibuki"}, {"BSN", "Balrog"}, {"URN", "Urien"}, {"ALX", "Alex"}, {"Z21", "Akuma"}, {"Z20", "Kolin"}, {"Z22", "Ed"}, {"Z23", "Menat"}, {"Z24", "Abigail"}, {"Z25", "Zeku"}, {"Z26", "Sakura"}, {"Z27", "Blanka"}, {"Z28", "Falke"}, {"Z29", "Cody"}, {"Z30", "G"}, {"Z31", "Sagat"}, {"Z32", "Kage"}, {"Z33", "Poison"}, {"Z34", "E. Honda"}, {"Z35", "Lucia"}, {"Z36", "Gill"}, {"Z37", "Seth"}, {"Z38", "Dan"}, {"Z39", "Rose"}, {"Z40", "Oro"}, {"Z41", "Akira"}, {"Z42", "Luke"}};
 
-// The offered titles, in the form's order: the game's FixedPhraseCommentSpec
-// Id and its English CommentText (trailing spaces trimmed).
 const struct {
     int id;
     const char* text;
@@ -271,9 +281,10 @@ bool ParseAnswer(const uint8_t* data, size_t size, Answer* out) {
 }
 
 void SortRoomList(std::vector<ListedRoom>* rooms) {
-    // 0: open seats, 1: room to queue, 2: full.
-    auto group = [](const ListedRoom& r) { return r.members >= kRoomCap ? 2 : r.openSeats > 0 ? 0
-                                                                                              : 1; };
+    auto group = [](const ListedRoom& r) {
+        if (r.members >= kRoomCap) return ListGroup::Full;
+        return r.openSeats > 0 ? ListGroup::OpenSeats : ListGroup::RoomToQueue;
+    };
     std::stable_sort(rooms->begin(), rooms->end(), [&](const ListedRoom& a, const ListedRoom& b) {
         if (group(a) != group(b)) return group(a) < group(b);
         return a.members > b.members;
@@ -385,8 +396,6 @@ std::string DeskMessage(std::string_view code, const Listing& l) {
 
 namespace {
 
-// A JSON string: quotes, backslashes and control characters escaped, and
-// bytes that are not valid UTF-8 (names are players' own) as U+FFFD.
 void JsonString(std::string& out, std::string_view s) {
     out += '"';
     for (size_t i = 0; i < s.size();) {
@@ -411,7 +420,7 @@ void JsonString(std::string& out, std::string_view s) {
         for (size_t k = 1; ok && k < len; k++) ok = (static_cast<unsigned char>(s[i + k]) & 0xC0) == 0x80;
         if (ok && len == 3) {
             const unsigned char c1 = static_cast<unsigned char>(s[i + 1]);
-            ok = !(c == 0xE0 && c1 < 0xA0) && !(c == 0xED && c1 >= 0xA0); // overlong, surrogates
+            ok = !(c == 0xE0 && c1 < 0xA0) && !(c == 0xED && c1 >= 0xA0);
         }
         if (ok && len == 4) {
             const unsigned char c1 = static_cast<unsigned char>(s[i + 1]);
@@ -450,9 +459,6 @@ std::string FormatRoomListJson(const std::vector<ListedRoom>& rooms, const RoomT
         out += "]";
         out += ",\"owner\":";
         JsonString(out, r.owner);
-        // The room's Polarity version (players list and join only their own's);
-        // null from a keeper before versions. sfvr_version is the same, under
-        // its name from before 0.4.0, for readers written then.
         for (const char* field : {",\"client_version\":", ",\"sfvr_version\":"}) {
             out += field;
             if (r.version.empty()) out += "null";
@@ -484,8 +490,6 @@ std::string FormatRoomListJson(const std::vector<ListedRoom>& rooms, const RoomT
             if (p) out += ',';
             player(r.players[p]);
         }
-        // Every table: its rules, state, seats (P1, P2; null open) and the
-        // running set's score. "rules" above stays the first table's.
         out += "],\"table_list\":[";
         for (size_t t = 0; t < r.tableList.size(); t++) {
             const ListedRoom::TableEntry& e = r.tableList[t];
@@ -495,10 +499,10 @@ std::string FormatRoomListJson(const std::vector<ListedRoom>& rooms, const RoomT
             out += ",\"state\":";
             JsonString(out, e.state);
             out += ",\"seats\":[";
-            for (int i = 0; i < 2; i++) {
-                if (i) out += ',';
-                if (e.seat[i].name.empty()) out += "null";
-                else player(e.seat[i]);
+            for (int seat = 0; seat < 2; seat++) {
+                if (seat) out += ',';
+                if (e.seat[seat].name.empty()) out += "null";
+                else player(e.seat[seat]);
             }
             out += "],\"score\":[" + std::to_string(e.wins[0]) + "," + std::to_string(e.wins[1]) + "]}";
         }
@@ -532,7 +536,6 @@ int ChatLimiter::Strikes(int64_t nowMs) const {
 Request PeekRequest(uint32_t seq, std::string_view code) { return {seq, "peek", {std::string(code)}}; }
 
 std::vector<std::string> PackRoomDetail(const RoomDetail& detail, size_t partBytes) {
-    // Control bytes never travel inside a field (they separate them).
     auto clean = [](std::string_view s) {
         std::string out;
         for (char ch : s) {
@@ -553,7 +556,7 @@ std::vector<std::string> PackRoomDetail(const RoomDetail& detail, size_t partByt
         if (!body.empty()) body += '\x1E';
         body += r;
     }
-    bodies.push_back(std::move(body)); // an empty room still answers once
+    bodies.push_back(std::move(body));
     std::vector<std::string> parts;
     for (size_t i = 0; i < bodies.size(); i++)
         parts.push_back(std::to_string(i + 1) + "/" + std::to_string(bodies.size()) + "\x1D" + bodies[i]);
@@ -587,221 +590,6 @@ bool JoinRoomDetail(const std::vector<std::string>& records, RoomDetail* out) {
     d.code = out->code;
     *out = std::move(d);
     return true;
-}
-
-std::string FoldName(std::string_view name) {
-    std::string out;
-    for (char ch : name) {
-        char c = ch;
-        if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
-        switch (c) {
-            case '0': c = 'o'; break;
-            case '1': c = 'i'; break;
-            case '3': c = 'e'; break;
-            case '4': c = 'a'; break;
-            case '5': c = 's'; break;
-            case '7': c = 't'; break;
-            case '@': c = 'a'; break;
-            case '$': c = 's'; break;
-            default: break;
-        }
-        if (c >= 'a' && c <= 'z') out += c;
-    }
-    return out;
-}
-
-std::string WordEntry(std::string_view line) {
-    std::string_view s = line;
-    while (!s.empty() && (s.back() == ' ' || s.back() == '\t' || s.back() == '\r')) s.remove_suffix(1);
-    const bool prefix = !s.empty() && s.back() == '*';
-    if (prefix) s.remove_suffix(1);
-    // A phrase keeps where its words break ('_'): chat matches it only as
-    // those words in a row, never letters typed apart ("b a d").
-    std::string w;
-    for (std::string_view word : Split(s, ' ')) {
-        const std::string f = FoldName(word);
-        if (f.empty()) continue;
-        if (!w.empty()) w += '_';
-        w += f;
-    }
-    if (w.empty()) return {};
-    return prefix ? w + '*' : w;
-}
-
-std::vector<std::string> ParseWordFile(std::string_view text) {
-    std::vector<std::string> words;
-    for (std::string_view line : Split(text, '\n')) {
-        size_t start = line.find_first_not_of(" \t\r");
-        if (start == std::string_view::npos || line[start] == '#') continue;
-        std::string w = WordEntry(line.substr(start));
-        if (!w.empty() && std::find(words.begin(), words.end(), w) == words.end()) words.push_back(std::move(w));
-    }
-    return words;
-}
-
-namespace {
-
-// What folding keeps (letters, and the digits and symbols that stand for them).
-bool FoldKeeps(char ch) {
-    const std::string one(1, ch);
-    return !FoldName(one).empty();
-}
-
-// A chat word ends at whitespace or ASCII punctuation (not @ $ ' which are
-// part of words: "a$$", "don't").
-bool ChatSeparator(unsigned char c) {
-    if (c >= 0x80) return false;
-    if (c <= ' ') return true;
-    if (c == '@' || c == '$' || c == '\'') return false;
-    return !std::isalnum(c);
-}
-
-} // namespace
-
-bool NameRejected(std::string_view name, const std::vector<std::string>& words) {
-    const std::string folded = FoldName(name);
-    if (folded.empty()) return false;
-    std::vector<std::string> parts; // the name's words, folded
-    std::string part;
-    for (char ch : name) {
-        if (FoldKeeps(ch)) part += FoldName(std::string(1, ch));
-        else if (!part.empty()) parts.push_back(std::move(part)), part.clear();
-    }
-    if (!part.empty()) parts.push_back(std::move(part));
-    for (const std::string& entry : words) {
-        const bool prefix = !entry.empty() && entry.back() == '*';
-        std::string w = prefix ? entry.substr(0, entry.size() - 1) : entry;
-        std::erase(w, '_'); // a phrase: its words run together, as a name has them
-        if (w.empty()) continue;
-        if (w.size() >= 5) {
-            if (folded.find(w) != std::string::npos) return true;
-            continue;
-        }
-        for (const std::string& p : parts) {
-            if (p == w || (prefix && p.rfind(w, 0) == 0)) return true;
-        }
-    }
-    return false;
-}
-
-std::string CensorChat(std::string_view text, const std::vector<std::string>& words) {
-    if (words.empty()) return std::string(text);
-
-    struct Word {
-        size_t from, to; // bytes of the text
-        std::string folded;
-    };
-
-    std::vector<Word> list;
-    for (size_t i = 0; i < text.size();) {
-        if (ChatSeparator(static_cast<unsigned char>(text[i]))) {
-            i++;
-            continue;
-        }
-        size_t j = i;
-        while (j < text.size() && !ChatSeparator(static_cast<unsigned char>(text[j]))) j++;
-        list.push_back({i, j, FoldName(text.substr(i, j - i))});
-        i = j;
-    }
-    std::vector<std::string_view> prefixes;
-    for (const std::string& e : words) {
-        if (e.size() > 1 && e.back() == '*') prefixes.emplace_back(e.data(), e.size() - 1);
-    }
-    auto exact = [&](const std::string& s) { return std::find(words.begin(), words.end(), s) != words.end(); };
-    std::vector<bool> hit(list.size(), false);
-    for (size_t i = 0; i < list.size(); i++) {
-        if (list[i].folded.empty()) continue;
-        // The longest run first: a phrase (its words in a row), then the word alone.
-        std::string run;
-        size_t longest = 0;
-        for (size_t n = 1; n <= 6 && i + n <= list.size(); n++) {
-            if (list[i + n - 1].folded.empty()) break;
-            if (n > 1) run += '_';
-            run += list[i + n - 1].folded;
-            if (exact(run)) longest = n;
-        }
-        if (!longest) {
-            for (std::string_view p : prefixes) {
-                if (list[i].folded.rfind(p, 0) == 0) longest = 1;
-            }
-        }
-        for (size_t n = 0; n < longest; n++) hit[i + n] = true;
-        if (longest) i += longest - 1;
-    }
-    std::string out;
-    size_t at = 0;
-    for (size_t k = 0; k < list.size(); k++) {
-        if (!hit[k]) continue;
-        out.append(text.substr(at, list[k].from - at));
-        for (size_t b = list[k].from; b < list[k].to; b++) {
-            if ((static_cast<unsigned char>(text[b]) & 0xC0) != 0x80) out += '*'; // one per character
-        }
-        at = list[k].to;
-    }
-    out.append(text.substr(at));
-    return out;
-}
-
-std::string WordListKey(int index) { return "wl" + std::to_string(index); }
-
-std::vector<std::string> PackWordList(const std::vector<std::string>& words) {
-    std::vector<std::string> values;
-    std::string current;
-    for (const std::string& w : words) {
-        if (w.empty() || w.size() > 500) continue;
-        if (!current.empty() && current.size() + 1 + w.size() > 512) {
-            values.push_back(std::move(current));
-            current.clear();
-            if (static_cast<int>(values.size()) == kWordListKeys) return values;
-        }
-        if (!current.empty()) current += ',';
-        current += w;
-    }
-    if (!current.empty()) values.push_back(std::move(current));
-    return values;
-}
-
-std::vector<std::string> UnpackWordList(const std::vector<std::string>& values) {
-    std::vector<std::string> words;
-    for (const std::string& v : values) {
-        for (std::string_view w : Split(v, ',')) {
-            if (!w.empty()) words.emplace_back(w);
-        }
-    }
-    return words;
-}
-
-std::string WordListHash(const std::vector<std::string>& words) {
-    uint64_t h = 1469598103934665603ull; // FNV-1a
-    for (const std::string& w : words) {
-        for (char c : w) h = (h ^ static_cast<unsigned char>(c)) * 1099511628211ull;
-        h = (h ^ ',') * 1099511628211ull;
-    }
-    char hex[17];
-    std::snprintf(hex, sizeof(hex), "%016llx", static_cast<unsigned long long>(h));
-    return hex;
-}
-
-std::string FormatMask(const std::map<uint32_t, int>& numbers) {
-    std::string s;
-    for (const auto& [id, n] : numbers) {
-        if (!s.empty()) s += ',';
-        s += std::to_string(id) + "=" + std::to_string(n);
-    }
-    return s;
-}
-
-std::map<uint32_t, int> ParseMask(std::string_view text) {
-    std::map<uint32_t, int> numbers;
-    if (text.empty()) return numbers;
-    for (std::string_view part : Split(text, ',')) {
-        const size_t eq = part.find('=');
-        int64_t id = 0;
-        int n = 0;
-        if (eq == std::string_view::npos || !Number(part.substr(0, eq), &id) || !Int(part.substr(eq + 1), &n)) continue;
-        if (id > 0 && id <= UINT32_MAX && n > 0 && n <= 9999) numbers[static_cast<uint32_t>(id)] = n;
-    }
-    return numbers;
 }
 
 void FormatPing(bool pong, uint64_t clockUs, uint8_t (&out)[kPingSize]) {
@@ -845,7 +633,6 @@ std::vector<uint32_t> ParseIds(std::string_view text) {
     return ids;
 }
 
-// "<phase>|<p1>|<p2>|<ready bits>|<w1>|<w2>|<code>|<stayer>|<streak>|<last winner>|<last loser>|<lw>|<ll>"
 std::string FormatTable(const TableState& s) {
     return std::string(1, static_cast<char>(s.phase)) + "|" + std::to_string(s.seat[0]) + "|" + std::to_string(s.seat[1]) + "|" +
            std::to_string((s.ready[0] ? 1 : 0) | (s.ready[1] ? 2 : 0)) + "|" + std::to_string(s.wins[0]) + "|" +
@@ -856,34 +643,33 @@ std::string FormatTable(const TableState& s) {
 
 bool ParseTable(std::string_view text, TableState* out) {
     const auto f = Split(text, '|');
-    // 17 since playing on (again), 16 since the relay (its room), 15 before.
-    if (f.size() < 15 || f.size() > 17 || f[0].size() != 1) return false;
+    if (f.size() < kTableFieldsBefore || f.size() > kTableFieldsAgain || f[0].size() != 1) return false;
     TableState s;
     const char p = f[0][0];
     if (p != 'o' && p != 'c' && p != 'n' && p != 'p' && p != 'a') return false;
     s.phase = static_cast<TablePhase>(p);
-    int64_t n[14] = {};
-    for (int i = 1; i < 15; i++) {
-        if (i == 6) continue; // the code
+    int64_t n[kTableFieldsBefore - 1] = {};
+    for (size_t i = 1; i < kTableFieldsBefore; i++) {
+        if (i == kTableCodeField) continue;
         if (!Number(f[i], &n[i - 1]) || n[i - 1] < 0 || n[i - 1] > UINT32_MAX) return false;
     }
     s.seat[0] = static_cast<uint32_t>(n[0]);
     s.seat[1] = static_cast<uint32_t>(n[1]);
     s.ready[0] = n[2] & 1;
     s.ready[1] = n[2] & 2;
-    s.wins[0] = static_cast<uint8_t>(std::min<int64_t>(n[3], 99));
-    s.wins[1] = static_cast<uint8_t>(std::min<int64_t>(n[4], 99));
-    s.code = std::string(f[6]);
+    s.wins[0] = static_cast<uint8_t>(std::min<int64_t>(n[3], kMaxScore));
+    s.wins[1] = static_cast<uint8_t>(std::min<int64_t>(n[4], kMaxScore));
+    s.code = std::string(f[kTableCodeField]);
     s.stayer = static_cast<uint32_t>(n[6]);
-    s.streak = static_cast<int>(std::min<int64_t>(n[7], 999));
+    s.streak = static_cast<int>(std::min<int64_t>(n[7], kMaxStreak));
     s.lastWinner = static_cast<uint32_t>(n[8]);
     s.lastLoser = static_cast<uint32_t>(n[9]);
-    s.lastScore[0] = static_cast<uint8_t>(std::min<int64_t>(n[10], 99));
-    s.lastScore[1] = static_cast<uint8_t>(std::min<int64_t>(n[11], 99));
+    s.lastScore[0] = static_cast<uint8_t>(std::min<int64_t>(n[10], kMaxScore));
+    s.lastScore[1] = static_cast<uint8_t>(std::min<int64_t>(n[11], kMaxScore));
     s.call = static_cast<uint32_t>(n[12]);
-    s.callSeconds = static_cast<uint8_t>(std::min<int64_t>(n[13], 99));
-    if (f.size() >= 16) s.watch = std::string(f[15]);
-    if (f.size() >= 17) s.again = f[16] == "1";
+    s.callSeconds = static_cast<uint8_t>(std::min<int64_t>(n[13], kMaxScore));
+    if (f.size() >= kTableFieldsRelay) s.watch = std::string(f[kTableWatchField]);
+    if (f.size() >= kTableFieldsAgain) s.again = f[kTableAgainField] == "1";
     *out = std::move(s);
     return true;
 }
@@ -903,21 +689,17 @@ void FillSeats(TableState* s, std::vector<uint32_t>* queue) {
 void ApplySetResult(const Rules& rules, int winnerSeat, const uint8_t (&games)[2], TableState* s, std::vector<uint32_t>* queue) {
     const int w = winnerSeat == 1 ? 1 : 0;
     const uint32_t winner = s->seat[w], loser = s->seat[1 - w];
-    // The set before this one: who played it as well has now played two in
-    // a row.
     const uint32_t before[2] = {s->lastWinner, s->lastLoser};
     auto playedBefore = [&](uint32_t id) { return id && (id == before[0] || id == before[1]); };
     s->lastWinner = winner;
     s->lastLoser = loser;
     s->lastScore[0] = games[w];
     s->lastScore[1] = games[1 - w];
-    // Who may stay: by the rotation, while they have played fewer than the
-    // limit's sets in a row here.
     uint32_t stays = 0;
     if (rules.rotation == Rotation::WinnerStays) stays = winner;
     else if (rules.rotation == Rotation::LoserStays) stays = loser;
-    const int played = stays && stays == s->stayer ? s->streak + 1 : 1;     // sets in a row, this one counted
-    if (stays && rules.staysLimit && played >= rules.staysLimit) stays = 0; // done: they go too
+    const int played = stays && stays == s->stayer ? s->streak + 1 : 1;
+    if (stays && rules.staysLimit && played >= rules.staysLimit) stays = 0;
     auto toBack = [&](uint32_t id) {
         if (!id) return;
         std::erase(*queue, id);
@@ -926,9 +708,6 @@ void ApplySetResult(const Rules& rules, int winnerSeat, const uint8_t (&games)[2
     for (int i = 0; i < 2; i++) {
         if (s->seat[i] && s->seat[i] != stays) s->seat[i] = 0;
     }
-    // Both go back (round robin, or a stayer at the limit): who has played
-    // two sets in a row waits longest; otherwise the loser goes first. So
-    // three players at a round robin table take turns whoever wins.
     const bool winnerFirst = playedBefore(loser) && !playedBefore(winner);
     if (winnerFirst) {
         if (winner != stays) toBack(winner);

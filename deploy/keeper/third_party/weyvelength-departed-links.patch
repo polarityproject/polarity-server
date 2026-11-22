@@ -1,8 +1,8 @@
 diff --git a/Client/src/client.cpp b/Client/src/client.cpp
-index e40708c..a8ea3bd 100644
+index f7d58e9..f2a4397 100644
 --- a/Client/src/client.cpp
 +++ b/Client/src/client.cpp
-@@ -382,7 +382,11 @@ namespace Weyvelength {
+@@ -401,7 +401,11 @@ namespace Weyvelength {
  				std::erase(_members, left->id);
  				_names.erase(left->id);
  				_member_data.erase(left->id);

@@ -82,17 +82,4 @@ bool ParseRules(std::string_view text, Rules* out, std::string* error) {
     return true;
 }
 
-std::string DescribeRules(const Rules& r) {
-    std::string out = "First to " + std::to_string(r.firstTo) + " \xC2\xB7 ";
-    switch (r.rotation) {
-        case Rotation::WinnerStays: out += "winner stays"; break;
-        case Rotation::LoserStays: out += "loser stays"; break;
-        case Rotation::RoundRobin: out += "round robin"; break;
-    }
-    if (r.rotation != Rotation::RoundRobin) out += r.staysLimit ? ", up to " + std::to_string(r.staysLimit) : ", no limit";
-    out += " \xC2\xB7 " + std::to_string(r.timer) + " seconds";
-    if (r.bestOf != 3) out += r.bestOf == 1 ? " \xC2\xB7 one round" : " \xC2\xB7 best of 5";
-    return out;
-}
-
 } // namespace sfv
