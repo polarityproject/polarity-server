@@ -14,8 +14,9 @@
 # them, only files that start as the mod writes them, at most --max-file-mb
 # each, at most --per-hour files and --per-day-mb an address; past
 # --max-total-mb (--max-crashes-mb) the oldest folders are removed. A stored
-# file is never replaced: the same name again is a retry (same size) or
-# refused (409). GET /v1/health answers "ok".
+# file is never replaced: the same name and size again is a retry, another
+# size is kept as name.2 up to name.5, then refused (409). GET /v1/health
+# answers "ok".
 #
 # Bodies go to disk in chunks. At most --max-uploads in progress
 # (--max-uploads-per-address from one address), --max-connections open, and
@@ -47,6 +48,7 @@ CRASH = re.compile(r"^(?P<day>\d{4}-\d{2}-\d{2})_\d{2}-\d{2}-\d{2}_crash_[0-9a-f
 MAGIC = {"sfvr": (b"SFVR",), "log": (b"Polarity", b"SFVR"), "dmp": (b"MDMP",)}
 CHUNK = 64 * 1024
 INCOMING = ".incoming"
+VARIANTS = 5  # files kept under one name: name, name.2 ... name.5
 
 
 class Store:
@@ -79,18 +81,29 @@ class Store:
 
     def put(self, match, name, temp, length, version):
         """Files the upload at temp: "stored", "retry" (the same file is already
-        here) or "taken" (another file has the name; never replaced)."""
+        here) or "taken" (VARIANTS other files have the name). A file is never
+        replaced: another one with the same name is kept as name.2 and so on,
+        so a client that rewrote its file still gets an answer it takes."""
         folder = os.path.join(self.root, match)
-        path = os.path.join(folder, name)
         with self.lock:
-            if os.path.exists(path):
+            stored_as = None
+            for n in range(1, VARIANTS + 1):
+                candidate = name if n == 1 else f"{name}.{n}"
+                path = os.path.join(folder, candidate)
+                if not os.path.exists(path):
+                    stored_as = candidate
+                    break
+                if os.path.getsize(path) == length:
+                    os.remove(temp)
+                    return "retry"
+            if stored_as is None:
                 os.remove(temp)
-                return "retry" if os.path.getsize(path) == length else "taken"
+                return "taken"
             os.makedirs(folder, mode=0o755, exist_ok=True)
             os.chmod(temp, 0o644)
             os.replace(temp, path)
             with open(os.path.join(folder, "received.txt"), "a", encoding="utf-8") as f:
-                f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime())} UTC  {version}  {name}\n")
+                f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime())} UTC  {version}  {stored_as}\n")
             os.utime(folder)
             self.total += length
             self._prune(keep=match)

@@ -470,8 +470,9 @@ Limits (`.env`): 16 MB a file, `REPORTS_PER_HOUR` files an hour from one
 address, and past `REPORTS_MAX_MB` / `CRASHES_MAX_MB` the oldest folders
 go. Fixed in `sfvr-reports.py` (its options): 256 MB a day from one
 address, 16 uploads at once (2 from one address), 64 open connections,
-and 300 s for a whole request. A stored file is never replaced: the same
-name with a different size is refused. `dc logs reports` shows each one
+and 300 s for a whole request. A stored file is never replaced: a file
+with the same name and another size is kept beside it as `<name>.2` (up to
+`.5`). `dc logs reports` shows each one
 received; the `ReportsUnhealthy` and `ContainerDown` alerts cover it.
 
 To look at them: copy them off with `scp` as the admin user (it reads them

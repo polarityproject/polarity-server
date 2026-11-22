@@ -76,7 +76,11 @@ class Reports(unittest.TestCase):
         body = b"SFVR" + os.urandom(200_000)
         self.assertEqual(self.post(NAME, body), 201)
         self.assertEqual(self.post(NAME, body), 200)  # a retry
-        self.assertEqual(self.post(NAME, b"SFVR" + b"x" * 10), 409)
+        for n in range(2, 6):  # another file under the name: kept beside it
+            self.assertEqual(self.post(NAME, b"SFVR" + b"x" * n), 201)
+            self.assertTrue(os.path.exists(self.stored(f"{NAME}.{n}")))
+        self.assertEqual(self.post(NAME, b"SFVR" + b"x" * 3), 200)  # a retry of name.3
+        self.assertEqual(self.post(NAME, b"SFVR" + b"x" * 9), 409)  # past name.5
         with open(self.stored(NAME), "rb") as f:
             self.assertEqual(f.read(), body)
         self.assertEqual(self.post(CRASH, b"Polarity 0.4.4\n", "/v1/crashes/"), 201)
@@ -92,10 +96,12 @@ class Reports(unittest.TestCase):
     def test_uploads_at_once(self):
         self.start("--max-uploads", "3", "--max-uploads-per-address", "2")
         held = [self.slow(NAME.replace("p1", f"p{i}"), 1000) for i in (1, 2)]
-        self.assertEqual(self.post(NAME, b"SFVR" + b"x" * 10), 429)
+        # Refused before the body is read: headers only, as a body left
+        # unread can turn the close into a reset before the answer is read.
+        self.assertEqual(self.head(NAME, 14)[:12], b"HTTP/1.0 429")
         self.server.gate.per_address = 5
         held.append(self.slow(NAME.replace("p1", "spec"), 1000))
-        self.assertEqual(self.post(NAME, b"SFVR" + b"x" * 10), 503)
+        self.assertEqual(self.head(NAME, 14)[:12], b"HTTP/1.0 503")
         for s in held:
             s.close()
         self.idle()
