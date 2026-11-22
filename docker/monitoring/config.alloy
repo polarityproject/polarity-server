@@ -3,7 +3,7 @@
 // (sshd, ufw, docker, the kernel) into Loki.
 
 discovery.docker "containers" {
-  host = "unix:///var/run/docker.sock"
+  host = "unix:///sock/docker.sock"
 }
 
 discovery.relabel "containers" {
@@ -25,7 +25,7 @@ discovery.relabel "containers" {
 }
 
 loki.source.docker "containers" {
-  host          = "unix:///var/run/docker.sock"
+  host          = "unix:///sock/docker.sock"
   targets       = discovery.docker.containers.targets
   relabel_rules = discovery.relabel.containers.rules
   labels        = {job = "containers"}

@@ -246,16 +246,18 @@ key>` in `polarity.ini`.
 
 ## Monitoring
 
-Seven more containers from `docker/compose.monitoring.yaml`, every one on
-127.0.0.1 only (nothing new is reachable from outside, no firewall change):
+Eight more containers from `docker/compose.monitoring.yaml`, every one on
+127.0.0.1 only or with no network (nothing new is reachable from outside,
+no firewall change):
 
 | Container | What it does |
 | --- | --- |
 | `node-exporter` | The VPS's CPU, memory, disk and network, and the keeper's metrics file (`sfvr_keeper_*`, written every 5 s) |
-| `container-stats` | CPU, memory, state and restarts per container, from the Docker API (read-only socket) |
+| `docker-api` | The only one with Docker's socket: it passes on the reads in `monitoring/docker-api.cfg` (containers, their stats and logs) and refuses every other call |
+| `container-stats` | CPU, memory, state and restarts per container, from the Docker API through `docker-api` |
 | `prometheus` | Keeps the metrics 30 days (at most 4 GB); evaluates the alert rules in `monitoring/rules.yml` |
 | `loki` | Keeps the logs 14 days |
-| `alloy` | Sends every container's log and the host's journal (sshd, ufw, Docker, the kernel) to Loki |
+| `alloy` | Sends every container's log (through `docker-api`) and the host's journal (sshd, ufw, Docker, the kernel) to Loki |
 | `grafana` | The dashboards: rooms service, VPS, logs |
 | `publisher` | Sends the public room list to the rooms API every 10 s (idle until it has an address) |
 

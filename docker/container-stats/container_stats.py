@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # sfvr-rooms container-stats: CPU, memory, state and restarts of the stack's
-# containers, from the Docker API (its socket, read-only), for Prometheus on
+# containers, from the Docker API (docker-api's socket), for Prometheus on
 # http://127.0.0.1:9466/metrics. Stands in for cAdvisor, which cannot place
 # containers when Docker keeps images in containerd (Docker 29's default:
 # "failed to identify the read-write layer ID"). Standard library only.

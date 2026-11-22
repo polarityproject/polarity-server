@@ -3,10 +3,12 @@
 #   docker compose -f compose.yaml -f compose.monitoring.yaml up -d --build
 #
 #   node-exporter  the VPS's health, and the keeper's metrics file (textfile)
-#   container-stats  CPU, memory and restarts per container (the Docker API)
+#   docker-api     the Docker API, reads only (monitoring/docker-api.cfg)
+#   container-stats  CPU, memory and restarts per container (through docker-api)
 #   prometheus     keeps the metrics 30 days; the alert rules (monitoring/rules.yml)
 #   loki           keeps the logs 14 days
-#   alloy          sends every container's log and the host's journal to loki
+#   alloy          sends every container's log (through docker-api) and the
+#                  host's journal to loki
 #   grafana        the dashboards (monitoring/dashboards)
 #   publisher      sends the keeper's public room list to the rooms API
 #                  (cloudflare/rooms-api) every 10 s
@@ -44,16 +46,32 @@ services:
       - "keeper:/keeper:ro"
     mem_limit: 64m
 
+  # The only one with Docker's socket, which is root on the host whatever
+  # the mount says. It passes on the reads in monitoring/docker-api.cfg and
+  # refuses the rest; its own socket is in the docker-api volume.
+  docker-api:
+    <<: *watcher
+    image: tecnativa/docker-socket-proxy:v0.5.0
+    network_mode: none
+    cap_drop: [ALL]
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./monitoring/docker-api.cfg:/usr/local/etc/haproxy/haproxy.cfg.template:ro"
+      - "docker-api:/sock"
+    mem_limit: 64m
+
   container-stats:
     <<: *watcher
     build: {context: ./container-stats}
     image: sfvr-rooms/container-stats:latest
-    # Root without capabilities, for the Docker socket (read-only: it only
-    # lists containers and reads their stats).
+    # Root without capabilities, for docker-api's socket (mode 600).
     cap_drop: [ALL]
+    environment:
+      DOCKER_SOCKET: /sock/docker.sock
     volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "docker-api:/sock:ro"
     mem_limit: 64m
+    depends_on: [docker-api]
   prometheus:
     <<: *watcher
     image: prom/prometheus:v2.55.1
@@ -83,7 +101,7 @@ services:
   alloy:
     <<: *watcher
     image: grafana/alloy:v1.5.1
-    # Root without capabilities: the Docker socket (root's) for the
+    # Root without capabilities: docker-api's socket (mode 600) for the
     # containers' logs, the journal (root's group) for the host's.
     cap_drop: [ALL]
     command:
@@ -94,13 +112,13 @@ services:
       - /etc/alloy/config.alloy
     volumes:
       - "./monitoring/config.alloy:/etc/alloy/config.alloy:ro"
-      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "docker-api:/sock:ro"
       - "/var/log/journal:/var/log/journal:ro"
       - "/run/log/journal:/run/log/journal:ro"
       - "/etc/machine-id:/etc/machine-id:ro"
       - "alloy:/alloy-data"
     mem_limit: 256m
-    depends_on: [loki]
+    depends_on: [loki, docker-api]
 
   grafana:
     <<: *watcher
@@ -153,6 +171,8 @@ secrets:
 
 volumes:
   prometheus: {}
+  # In memory: only docker-api's socket.
+  docker-api: {driver_opts: {type: tmpfs, device: tmpfs}}
   loki: {}
   alloy: {}
   grafana: {}
