@@ -102,6 +102,7 @@ services:
       SFVR_REPORTS_MAX_MB: ${REPORTS_MAX_MB:-4096}
       SFVR_CRASHES_MAX_MB: ${CRASHES_MAX_MB:-1024}
     command: [--per-hour, "${REPORTS_PER_HOUR:-120}"]
+    mem_limit: 256m   # a backstop: bodies go to disk, at most 16 uploads at once
     # The host's folders (owned by uid 10001, docs/install.md step 6):
     # read, copied and bundled there, as before the stack.
     volumes:

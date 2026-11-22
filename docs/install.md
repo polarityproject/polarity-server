@@ -464,8 +464,11 @@ reports) on TCP 5580 and files them in the host's folders:
 
 Limits (`.env`): 16 MB a file, `REPORTS_PER_HOUR` files an hour from one
 address, and past `REPORTS_MAX_MB` / `CRASHES_MAX_MB` the oldest folders
-go. `dc logs reports` shows each one received; the `ReportsUnhealthy` and
-`ContainerDown` alerts cover it.
+go. Fixed in `sfvr-reports.py` (its options): 256 MB a day from one
+address, 16 uploads at once (2 from one address), 64 open connections,
+and 300 s for a whole request. A stored file is never replaced: the same
+name with a different size is refused. `dc logs reports` shows each one
+received; the `ReportsUnhealthy` and `ContainerDown` alerts cover it.
 
 To look at them: copy them off with `scp` as the admin user (it reads them
 through the `sfvr-reports` group, step 6):
